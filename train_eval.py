@@ -13,6 +13,7 @@ Contains:
 """
 
 import os
+import sys
 import csv
 import copy
 from typing import List, Tuple
@@ -52,7 +53,7 @@ def train_one_epoch(
     total_loss = correct = total = 0
 
     pbar = tqdm(loader, desc=f"Epoch {epoch:03d}/{total_epochs} [train]",
-                ncols=120, leave=False)
+                dynamic_ncols=True, leave=False, file=sys.stderr)
 
     for clips, labels in pbar:
         clips = clips.to(device, non_blocking=True)
@@ -96,8 +97,8 @@ def evaluate(
     all_labels: list = []
     all_probs: list = []
 
-    pbar = tqdm(loader, desc=f"  [{desc}]", ncols=100, leave=False)
-    for clips, labels in pbar:
+    n_batches = len(loader)
+    for batch_idx, (clips, labels) in enumerate(loader):
         clips = clips.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
@@ -114,6 +115,15 @@ def evaluate(
         all_preds.extend(preds.cpu().tolist())
         all_labels.extend(labels.cpu().tolist())
         all_probs.extend(probs.cpu().numpy())
+
+        # Single-line overwriting progress (works in any terminal)
+        pct = (batch_idx + 1) / n_batches * 100
+        acc_now = 100 * correct / total
+        print(f"\r  [{desc}] {batch_idx+1}/{n_batches}  "
+              f"loss={total_loss/total:.4f}  acc={acc_now:.1f}%  ",
+              end="", flush=True)
+
+    print()  # newline after the overwriting line
 
     avg_loss = total_loss / total if total > 0 else 0.0
     accuracy = 100 * correct / total if total > 0 else 0.0
