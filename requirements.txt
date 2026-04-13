@@ -1,0 +1,32 @@
+# Speckle-PUF Recognition — Python dependencies
+# Install with:  pip install -r requirements.txt
+#
+# GPU PyTorch (CUDA 12.1) — comment out the CPU version below and run:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+#
+# CPU-only (default):
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Numerical / image processing
+numpy>=1.24.0
+Pillow>=9.0.0
+opencv-python>=4.7.0
+
+# Machine learning & metrics
+scikit-learn>=1.2.0
+
+# Visualization
+matplotlib>=3.6.0
+
+# Serialization
+joblib>=1.2.0
+
+# Progress bar (optional but recommended)
+tqdm>=4.65.0
+
+# Video frame extraction (training pipeline)
+imageio-ffmpeg>=0.4.8
+
+# Live demo GUI (SLM control + real-time inference)
+PySide6>=6.5.0

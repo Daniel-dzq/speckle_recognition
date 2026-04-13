@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Model weights (large files, not committed)
+*.pth
+*.pt
+*.joblib
+*.pkl
+
+# Training outputs
+output/
+results/
+checkpoints/
+confusion_matrix.png
+training_log.csv
+per_class_metrics.csv
+test_predictions.csv
+
+# Video data (too large to commit)
+video_capture/
+videos/
+screenshots/
+data/
+
+# Temporary utility scripts
+check_gpu.py
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# macOS
+.DS_Store
