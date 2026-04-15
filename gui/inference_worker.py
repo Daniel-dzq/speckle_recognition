@@ -56,6 +56,7 @@ class InferenceWorker(QThread):
         self._class_names = []
         self._clip_len    = 16
         self._img_size    = 224
+        self._input_mode  = "gray"    # "gray" (legacy) or "rgb" (unified model)
         self._device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self._frame_buffer  = collections.deque(maxlen=self._clip_len)
@@ -93,12 +94,13 @@ class InferenceWorker(QThread):
             self._class_names = class_names
             self._clip_len    = clip_len
             self._img_size    = img_size
+            self._input_mode  = ckpt.get("input_mode", "gray")
             self._frame_buffer = collections.deque(maxlen=clip_len)
             self._vote_buffer.clear()
 
             msg = (f"Model loaded: {fiber_name}  |  {model_type}  |  "
                    f"classes={num_classes}  clip_len={clip_len}  "
-                   f"device={self._device}")
+                   f"input={self._input_mode}  device={self._device}")
             self.model_loaded.emit(msg)
             return True
 
@@ -140,18 +142,24 @@ class InferenceWorker(QThread):
 
     def _preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
         """BGR uint8 -> normalized float32 (3, H, W) matching dataset.py."""
-        # Resize
         resized = cv2.resize(frame, (self._img_size, self._img_size),
                              interpolation=cv2.INTER_AREA)
-        # Convert to gray then replicate to 3ch (matches SpeckleClipDataset)
-        if len(resized.shape) == 3:
-            gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-        else:
-            gray = resized
-        gray_f = gray.astype(np.float32) / 255.0  # (H, W)
 
-        # 3 channels
-        frame_3ch = np.stack([gray_f, gray_f, gray_f], axis=0)  # (3, H, W)
+        if self._input_mode == "rgb":
+            if len(resized.shape) == 2:
+                rgb = np.stack([resized, resized, resized], axis=-1)
+            else:
+                rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+            frame_3ch = rgb.astype(np.float32) / 255.0          # (H, W, 3)
+            frame_3ch = frame_3ch.transpose(2, 0, 1)            # (3, H, W)
+        else:
+            if len(resized.shape) == 3:
+                gray = cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
+            else:
+                gray = resized
+            gray_f = gray.astype(np.float32) / 255.0
+            frame_3ch = np.stack([gray_f, gray_f, gray_f], axis=0)  # (3, H, W)
+
         for c in range(3):
             frame_3ch[c] = (frame_3ch[c] - self._mean[c]) / self._std[c]
         return frame_3ch

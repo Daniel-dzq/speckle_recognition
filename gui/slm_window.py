@@ -6,7 +6,11 @@ Improved version:
   - Better fullscreen / windowed transitions
   - Adaptive letter sizing based on actual display area
   - Image mode rescales cleanly after move/resize/fullscreen changes
+  - Auto-loads per-letter PNG images from <project_root>/letter_images/
+    when they exist (run scripts/export_letter_images.py once to generate)
 """
+
+import os
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PySide6.QtCore import Qt, Signal, QRect
@@ -14,6 +18,10 @@ from PySide6.QtGui import (
     QFont, QKeyEvent, QMouseEvent, QColor, QPalette,
     QPixmap, QScreen, QGuiApplication,
 )
+
+_GUI_DIR = os.path.dirname(os.path.abspath(__file__))
+_ROOT_DIR = os.path.dirname(_GUI_DIR)
+_LETTER_IMAGES_DIR = os.path.join(_ROOT_DIR, "letter_images")
 
 
 class SLMWindow(QWidget):
@@ -86,7 +94,7 @@ class SLMWindow(QWidget):
         auto_size = int(short_side * (1.0 - self._margin_ratio * 2) * 0.78)
         font_px = max(24, min(self._base_font_size, auto_size))
 
-        font = QFont("Arial", 10, QFont.Bold)
+        font = QFont("Calibri", 10, QFont.Bold)
         font.setPixelSize(font_px)
         self._label.setFont(font)
         self._label.setText(text)
@@ -116,6 +124,15 @@ class SLMWindow(QWidget):
         letter = letter.strip().upper() if letter.strip() else " "
         self._current_letter = letter
         self._pixmap_source = None
+
+        # Auto-load a pre-rendered PNG image for this letter if one exists.
+        if letter.isalpha() and len(letter) == 1:
+            img_path = os.path.join(_LETTER_IMAGES_DIR, f"{letter}.png")
+            if os.path.isfile(img_path):
+                pix = QPixmap(img_path)
+                if not pix.isNull():
+                    self._pixmap_source = pix
+
         self._refresh_content()
         self.letter_changed.emit(letter)
 

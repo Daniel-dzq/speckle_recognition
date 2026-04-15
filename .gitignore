@@ -23,6 +23,9 @@ env/
 output/
 results/
 checkpoints/
+
+# Frame / manifest caches
+.cache/
 confusion_matrix.png
 training_log.csv
 per_class_metrics.csv

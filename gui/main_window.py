@@ -173,6 +173,22 @@ QScrollArea {
 """
 
 
+FIBER_MODELS_DIR = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
+LOW_CONFIDENCE_THRESHOLD = 0.40
+
+
+def discover_fiber_models(model_dir: str = FIBER_MODELS_DIR):
+    """Return {fiber_name: checkpoint_path} for all Fiber*.pth files."""
+    result = {}
+    if not os.path.isdir(model_dir):
+        return result
+    for f in sorted(os.listdir(model_dir)):
+        if f.endswith(".pth"):
+            name = os.path.splitext(f)[0]
+            result[name] = os.path.join(model_dir, f)
+    return result
+
+
 def discover_fibers(video_dir: str):
     fibers = []
     if not os.path.isdir(video_dir):
@@ -245,6 +261,8 @@ class MainWindow(QMainWindow):
         self._root = ROOT
         self._video_dir = os.path.join(ROOT, "video_capture")
         self._ckpt_dir = os.path.join(ROOT, "checkpoints")
+        self._fiber_models: dict = {}
+        self._active_fiber: str = ""
         self._slm_window = None
         self._camera_worker = None
         self._infer_worker = InferenceWorker(self)
@@ -264,10 +282,9 @@ class MainWindow(QMainWindow):
         self._apply_style()
         self._connect_signals()
         self._refresh_fiber_list()
-        self._refresh_checkpoint_list()
         self._refresh_screen_list()
         self._apply_responsive_metrics(force=True)
-        self._log("Speckle-PUF demo ready. Select a fiber and load a model to begin.")
+        self._log("Speckle-PUF demo ready. Select a fiber to load its authentication model.")
 
     def _setup_ui(self):
         self.setWindowTitle("Speckle-PUF Live Demo")
@@ -317,7 +334,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self._status_bar)
         self._lbl_device = QLabel("Device: checking...")
         self._lbl_fps = QLabel("FPS: --")
-        self._lbl_model = QLabel("Model: none")
+        self._lbl_model = QLabel("Fiber: none")
         self._status_bar.addWidget(self._lbl_device)
         self._status_bar.addWidget(self._make_sep())
         self._status_bar.addWidget(self._lbl_model)
@@ -337,13 +354,17 @@ class MainWindow(QMainWindow):
         layout.setSpacing(8)
         layout.setContentsMargins(4, 4, 10, 4)
 
-        fiber_box = QGroupBox("Fiber & Model")
+        fiber_box = QGroupBox("Fiber Authentication")
         fl = QGridLayout(fiber_box)
         fl.setSpacing(6)
 
-        fl.addWidget(QLabel("Fiber:"), 0, 0)
+        fl.addWidget(QLabel("Authorized fiber:"), 0, 0)
         self._combo_fiber = QComboBox()
-        self._combo_fiber.setToolTip("Select which fiber's model to use for recognition")
+        self._combo_fiber.setToolTip(
+            "Select the fiber whose model to use.\n"
+            "The model is loaded automatically on selection."
+        )
+        self._combo_fiber.currentIndexChanged.connect(self._on_fiber_selected)
         fl.addWidget(self._combo_fiber, 0, 1)
 
         btn_refresh = QPushButton("Refresh")
@@ -351,19 +372,21 @@ class MainWindow(QMainWindow):
         btn_refresh.clicked.connect(self._refresh_fiber_list)
         fl.addWidget(btn_refresh, 0, 2)
 
-        fl.addWidget(QLabel("Checkpoint:"), 1, 0)
-        self._combo_ckpt = QComboBox()
-        fl.addWidget(self._combo_ckpt, 1, 1, 1, 2)
-
-        self._btn_load_model = QPushButton("Load Model")
-        self._btn_load_model.setObjectName("accent")
-        self._btn_load_model.clicked.connect(self._load_model)
-        fl.addWidget(self._btn_load_model, 2, 0, 1, 3)
+        self._lbl_model_path = QLabel("")
+        self._lbl_model_path.setWordWrap(True)
+        self._lbl_model_path.setStyleSheet("color: #666; font-size: 10px;")
+        fl.addWidget(self._lbl_model_path, 1, 0, 1, 3)
 
         self._lbl_model_status = QLabel("No model loaded")
         self._lbl_model_status.setWordWrap(True)
         self._lbl_model_status.setStyleSheet("color: #888; font-size: 11px;")
-        fl.addWidget(self._lbl_model_status, 3, 0, 1, 3)
+        fl.addWidget(self._lbl_model_status, 2, 0, 1, 3)
+
+        self._lbl_auth_warning = QLabel("")
+        self._lbl_auth_warning.setWordWrap(True)
+        self._lbl_auth_warning.setVisible(False)
+        fl.addWidget(self._lbl_auth_warning, 3, 0, 1, 3)
+
         layout.addWidget(fiber_box)
 
         slm_box = QGroupBox("SLM Output Window")
@@ -654,28 +677,47 @@ class MainWindow(QMainWindow):
         self._infer_worker.error.connect(self._on_infer_error)
 
     def _refresh_fiber_list(self):
-        fibers = discover_fibers(self._video_dir)
+        self._fiber_models = discover_fiber_models()
+        prev = self._combo_fiber.currentText()
+        self._combo_fiber.blockSignals(True)
         self._combo_fiber.clear()
-        for f in fibers:
-            self._combo_fiber.addItem(f)
-        self._log(f"Found fibers: {fibers}")
-        self._refresh_checkpoint_list()
 
-    def _refresh_checkpoint_list(self):
-        ckpts = discover_checkpoints(self._ckpt_dir)
-        self._combo_ckpt.clear()
-        if not ckpts:
-            self._combo_ckpt.addItem("(no checkpoints found)")
-            return
+        if self._fiber_models:
+            for name in self._fiber_models:
+                self._combo_fiber.addItem(name)
+            self._log(f"Found fiber models: {list(self._fiber_models.keys())}")
+        else:
+            self._log(f"[WARNING] No fiber models in {FIBER_MODELS_DIR}")
+            self._log("  Run: python -u scripts/fiber_auth_eval.py")
 
+        if prev and self._combo_fiber.findText(prev) >= 0:
+            self._combo_fiber.setCurrentText(prev)
+        self._combo_fiber.blockSignals(False)
+
+        # Load the currently shown fiber (signals were blocked during population)
+        if self._combo_fiber.count() > 0:
+            self._active_fiber = ""
+            self._on_fiber_selected(self._combo_fiber.currentIndex())
+
+    def _on_fiber_selected(self, index: int):
         fiber = self._combo_fiber.currentText()
-        fkey = fiber_key(fiber) if fiber else ""
-        best_idx = 0
-        for i, (key, path) in enumerate(ckpts.items()):
-            self._combo_ckpt.addItem(key, userData=path)
-            if key == fkey:
-                best_idx = i
-        self._combo_ckpt.setCurrentIndex(best_idx)
+        if not fiber:
+            return
+        path = self._fiber_models.get(fiber)
+        if not path or not os.path.isfile(path):
+            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
+            self._lbl_model_status.setText(f"Model not found for {fiber}")
+            self._lbl_model_path.setText("")
+            return
+        self._active_fiber = fiber
+        self._lbl_model_path.setText(os.path.basename(path))
+        self._lbl_model_status.setStyleSheet("color: #a0c4ff; font-size: 11px;")
+        self._lbl_model_status.setText(f"Loading {fiber} ...")
+        self._log(f"Loading model for {fiber} ...")
+        ok = self._infer_worker.load_model(path)
+        if not ok:
+            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
+            self._lbl_model_status.setText("Load failed")
 
     def _describe_screen(self, idx, screen):
         geom = screen.geometry()
@@ -748,27 +790,26 @@ class MainWindow(QMainWindow):
         self._show_slm_on_selected_screen(force_show=True)
 
     def _load_model(self):
-        idx = self._combo_ckpt.currentIndex()
-        path = self._combo_ckpt.itemData(idx)
-        if not path or not os.path.isfile(path):
-            name = self._combo_ckpt.currentText()
-            path = os.path.join(self._ckpt_dir, f"{name}_best.pth")
-
-        if not path or not os.path.isfile(str(path)):
-            self._log(f"[ERROR] Checkpoint not found: {path}")
-            return
-
-        self._log(f"Loading model from: {path}")
-        ok = self._infer_worker.load_model(path)
-        if not ok:
-            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
-            self._lbl_model_status.setText("Load failed")
+        fiber = self._combo_fiber.currentText()
+        if fiber:
+            self._on_fiber_selected(self._combo_fiber.currentIndex())
+        else:
+            self._log("[ERROR] No fiber selected")
 
     @Slot(str)
     def _on_model_loaded(self, msg: str):
+        fiber = self._active_fiber or "?"
         self._lbl_model_status.setStyleSheet("color: #51cf66; font-size: 11px;")
-        self._lbl_model_status.setText("Loaded")
-        self._lbl_model.setText(f"Model: {self._combo_ckpt.currentText()}")
+        self._lbl_model_status.setText(f"Loaded: {fiber}")
+        self._lbl_model.setText(f"Fiber: {fiber}")
+        self._lbl_auth_warning.setVisible(False)
+        # Sync dropdown to the fiber that actually finished loading
+        if fiber and self._combo_fiber.currentText() != fiber:
+            self._combo_fiber.blockSignals(True)
+            idx = self._combo_fiber.findText(fiber)
+            if idx >= 0:
+                self._combo_fiber.setCurrentIndex(idx)
+            self._combo_fiber.blockSignals(False)
         self._log(f"[MODEL] {msg}")
 
     def _toggle_slm_window(self):
@@ -1401,6 +1442,19 @@ class MainWindow(QMainWindow):
         self._lbl_conf.setText(f"Confidence: {conf * 100:.1f}%")
         topk_str = "  ".join(f"{cls}({p * 100:.1f}%)" for cls, p in topk)
         self._lbl_topk.setText(topk_str if topk_str else "--")
+
+        if conf < LOW_CONFIDENCE_THRESHOLD:
+            self._lbl_auth_warning.setText(
+                f"Low confidence ({conf*100:.0f}%) — possible unauthorized fiber or noise"
+            )
+            self._lbl_auth_warning.setStyleSheet(
+                "color: #ff6b6b; font-weight: bold; font-size: 11px; "
+                "background-color: #3c1515; border: 1px solid #e06c75; "
+                "border-radius: 4px; padding: 4px;"
+            )
+            self._lbl_auth_warning.setVisible(True)
+        else:
+            self._lbl_auth_warning.setVisible(False)
 
     @Slot(str)
     def _on_infer_error(self, msg: str):
