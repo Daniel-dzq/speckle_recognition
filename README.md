@@ -1,52 +1,60 @@
-# Speckle-PUF Recognition
+# Dual-Channel Multimode Fiber Optical PUF — Speckle Recognition System
 
-A deep learning toolkit for classifying optical speckle patterns produced by
-**SLM-encoded letters** transmitted through **multimode / plastic optical fibers**.
-The system can decode letter encodings or identify fiber identity from speckle
-images that are visually indistinguishable to the human eye.
+A deep-learning-based optical Physical Unclonable Function (PUF) system that uses speckle patterns from multimode plastic optical fibers for **26-letter challenge–response authentication** and **fiber-specific identity verification**.
+
+The system encodes letters (A–Z) onto a Spatial Light Modulator (SLM), injects the patterned light into a prepared multimode fiber, and captures the resulting speckle output with a camera. A CNN classifier then decodes the letter from the speckle image. Because each fiber produces a unique speckle transformation due to its internal random microstructure, the same model trained on one fiber **fails** on a different fiber — this asymmetry is the basis for PUF authentication.
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
+- [System Overview](#system-overview)
 - [Repository Structure](#repository-structure)
-- [Quick Start](#quick-start)
 - [Installation](#installation)
-- [Data Preparation](#data-preparation)
+- [Data Layout](#data-layout)
 - [Training Workflows](#training-workflows)
-  - [Single-fiber decode (recommended)](#1-single-fiber-decode-recommended)
-  - [End-to-end pipeline](#2-end-to-end-pipeline)
-  - [Multi-fiber training (all fibers)](#3-multi-fiber-training-all-fibers)
-  - [Video-clip model (R3D / CNN-Pool)](#4-video-clip-model-r3d--cnn-pool)
+  - [Single-fiber training](#1-single-fiber-training)
+  - [Multi-fiber batch training](#2-multi-fiber-batch-training)
+  - [Fiber-PUF authentication evaluation](#3-fiber-puf-authentication-evaluation)
+  - [Unified multi-domain training](#4-unified-multi-domain-training)
+  - [Domain ablation study](#5-domain-ablation-study)
 - [Inference](#inference)
 - [Live Demo GUI](#live-demo-gui)
-- [Legacy GUI (Tkinter)](#legacy-gui-tkinter)
-- [Cross-Fiber Evaluation](#cross-fiber-evaluation)
+- [Publication Figure Generation](#publication-figure-generation)
+- [Authentication Results](#authentication-results)
 - [Model Architecture](#model-architecture)
-- [MindVision CCD Camera Support](#mindvision-ccd-camera-support)
-- [Results](#results)
+- [Hardware Support](#hardware-support)
 - [FAQ](#faq)
 
 ---
 
-## Overview
+## System Overview
 
 ```
-SLM encodes letter A  -->  Fiber  -->  Camera captures speckle video
-SLM encodes letter B  -->  Fiber  -->  ...
-         ...
-SLM encodes letter Z  -->  Fiber  -->  ...
-
-                           +----------------------+
-  speckle frames  ------>  |  SimpleCNN  /  R3D   |  ----->  predicted letter
-                           +----------------------+
+                        Multimode Plastic
+  SLM (letter A-Z)  -->  Optical Fiber   -->  CMOS Camera  -->  Speckle Video
+                        (random scatter)
+                                                                     |
+                                                                     v
+                                                          +--------------------+
+                                                          |  ResNet18 + Pool   |
+                                                          |  (fiber-specific)  |
+                                                          +--------------------+
+                                                                     |
+                                                                     v
+                                                           Predicted letter
+                                                           + confidence score
 ```
 
-**Key insight**: Although all speckle patterns look like random noise, each
-letter encoding subtly shifts the spatial frequency statistics of the output
-speckle. A CNN can reliably extract these high-dimensional statistical
-differences that are invisible to human observers.
+**Three illumination domains** are supported:
+
+| Domain | Directory | Description |
+|--------|-----------|-------------|
+| Green only | `videocapture/Green/` | Side-illumination green laser only |
+| Green + Red (fixed) | `videocapture/GreenAndRed/` | Green side + red end-face at fixed power |
+| Green + Red (dynamic) | `videocapture/RedChange/` | Green side + red end-face with power sweep |
+
+**Five fiber samples** (Fiber1–Fiber5) are used for PUF evaluation. Each fiber has 26 letter videos per domain, totalling 390 videos.
 
 ---
 
@@ -54,537 +62,427 @@ differences that are invisible to human observers.
 
 ```
 speckle_recognition/
+|
 |-- scripts/
-|   |-- train_fiber.py          # Train a single fiber (video-clip model)
-|   |-- train_all_fibers.py     # Train all fibers sequentially
-|   |-- evaluate_cross_fiber.py # Cross-fiber generalization evaluation
-|   |-- launch_demo.py          # Launch live demo GUI (PySide6)
-|   +-- env_check.py            # Environment & dependency check
+|   |-- train_fiber.py              Single-fiber model training
+|   |-- train_all_fibers.py         Batch training for all fibers
+|   |-- fiber_auth_eval.py          Fiber-PUF authentication evaluation (5x5 matrix)
+|   |-- diagnose_domains.py         Domain ablation study
+|   |-- run_all_fiber_ablations.py  Run ablation across all fibers
+|   |-- evaluate_cross_fiber.py     Cross-fiber generalization test
+|   |-- export_letter_images.py     Export SLM letter images from PowerPoint
+|   |-- launch_demo.py              Launch the live demo GUI
+|   |-- env_check.py                Environment and dependency check
+|   |-- make_paper_figures.py       Generate publication-quality figures
+|   +-- plot_style.py               Shared plotting style for figures
 |
 |-- gui/
-|   |-- main_window.py          # Live demo main window (PySide6)
-|   |-- camera_worker.py        # OpenCV camera capture thread
-|   |-- mv_camera_worker.py     # MindVision SDK camera capture thread
-|   |-- mvsdk.py                # Python ctypes wrapper for MindVision SDK
-|   |-- inference_worker.py     # Real-time inference thread
-|   |-- slm_window.py           # SLM output window
-|   |-- libmvsdk.dylib          # MindVision SDK library (macOS arm64)
-|   +-- win_sdk/                # MindVision SDK DLLs (Windows x64, bundled)
-|       |-- MVCAMSDK_X64.dll
-|       |-- MVImageProcess_X64.DLL
-|       |-- hAcqHuaTengVision*_X64.dll
-|       |-- Usb*Camera*.Interface
-|       +-- drivers/            # Windows USB driver (.inf/.sys)
+|   |-- main_window.py              Main GUI window (PySide6)
+|   |-- slm_window.py               SLM output display window
+|   |-- camera_worker.py            OpenCV camera capture thread
+|   |-- mv_camera_worker.py         MindVision SDK camera thread
+|   |-- inference_worker.py         Real-time CNN inference thread
+|   |-- mvsdk.py                    MindVision Python ctypes wrapper
+|   |-- __init__.py
+|   |-- libmvsdk.dylib              MindVision SDK (macOS arm64)
+|   +-- win_sdk/                    MindVision SDK DLLs + drivers (Windows x64)
 |
-|-- dataset.py              # Video-clip dataset with temporal split
-|-- models.py               # CNNPoolModel and R3DModel
-|-- train_eval.py           # Training loop, evaluation, output saving
-|-- predict.py              # Frame-level inference + majority vote
-|-- train_model.py          # Frame-level CNN training (SimpleCNN)
-|-- run_pipeline.py         # End-to-end: extraction -> training -> evaluation
-|-- deep_learning_gui.py    # Legacy Tkinter GUI application
-|-- requirements.txt        # Python dependencies
-|-- README.md               # This file
-|-- GUI_TUTORIAL.md         # Step-by-step live demo tutorial
+|-- models.py                       CNN architectures (CNNPoolModel, R3DModel, SimpleCNN)
+|-- dataset.py                      Video-clip dataset with temporal split
+|-- unified_dataset.py              Multi-domain unified dataset with caching
+|-- train_eval.py                   Training loop, evaluation, metrics export
+|-- train_unified.py                Unified multi-domain training entry point
+|-- evaluate_unified.py             Unified model evaluation with domain/fiber breakdown
+|-- predict.py                      Frame-level inference with majority vote
+|-- train_model.py                  Frame-level SimpleCNN training
+|-- run_pipeline.py                 End-to-end extraction + training pipeline
+|-- deep_learning_gui.py            Legacy Tkinter GUI
+|-- visualize_features.py           Feature visualization utilities
 |
-|-- checkpoints/            # Saved model weights (.pth)
-|-- results/                # Per-fiber training results and metrics
-|   |-- fiber1/
-|   |   |-- best_model.pth
-|   |   |-- confusion_matrix.png
-|   |   |-- training_log.csv
-|   |   |-- per_class_metrics.csv
-|   |   +-- test_predictions.csv
-|   +-- ...
-+-- video_capture/          # Raw video data (not committed)
-    |-- fiber1/
-    |   |-- A.avi
-    |   +-- ...
-    +-- ...
+|-- letter_images/                  Pre-rendered SLM letter PNGs (A-Z, Calibri Bold)
+|-- figures/                        Publication figures (PNG 600dpi + PDF + SVG)
+|-- requirements.txt                Python dependencies
+|-- README.md                       This file
+|-- GUI_TUTORIAL.md                 Step-by-step live demo tutorial
++-- USAGE.md                        Additional usage notes
 ```
 
----
+**Directories created at runtime (not committed):**
 
-## Quick Start
-
-```bash
-# 1. Clone and install
-git clone https://github.com/Daniel-dzq/speckle_recognition.git
-cd speckle_recognition
-pip install -r requirements.txt
-
-# 2. Place your letter videos in video_capture/<fiber_name>/
-#    (name them A.avi, B.avi, ... or A.mp4, B.mp4, ...)
-
-# 3. Train a single fiber
-python scripts/train_fiber.py --fiber fiber1
-
-# 4. Train all fibers at once
-python scripts/train_all_fibers.py --epochs 50 --lr 1e-4
-
-# 5. Launch the live demo GUI
-python scripts/launch_demo.py
+```
+videocapture/                       Raw video data (3 domains x 5 fibers x 26 letters)
+results/                            Training outputs, metrics, predictions
+  |-- fiber1/ ... fiber5/           Per-fiber single-domain results
+  |-- fiber_auth/                   5x5 authentication matrix + per-fiber models
+  |-- unified/                      Unified multi-domain evaluation
+  +-- cross_fiber/                  Cross-fiber generalization results
+checkpoints/                        Model checkpoints (.pth)
+.cache/                             Decoded frame cache for fast reloading
 ```
 
 ---
 
 ## Installation
 
-### Prerequisites
+### Requirements
 
-- Python 3.9 or newer
-- pip or conda
+- Python 3.9+
+- PyTorch 1.13+
+- OpenCV
+- PySide6 (for GUI)
 
-### CPU-only (no GPU required)
+### Setup
 
 ```bash
+git clone https://github.com/Daniel-dzq/speckle_recognition.git
+cd speckle_recognition
 pip install -r requirements.txt
 ```
 
-### GPU-accelerated (recommended for faster training)
+### GPU acceleration (optional but recommended)
 
 ```bash
-# NVIDIA CUDA:
+# NVIDIA CUDA
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
-# Apple Silicon (M1-M4) — MPS acceleration is automatic:
+# Apple Silicon — MPS is automatic, no special install needed
 pip install torch torchvision
 ```
 
-> On Apple Silicon Macs, PyTorch automatically uses the Metal Performance Shaders
-> (MPS) backend for GPU acceleration. No special installation is needed.
-
-### Verify your setup
+### Verify setup
 
 ```bash
 python scripts/env_check.py
 ```
 
-Expected output:
-
-```
-============================================================
-  Speckle-PUF Environment Check
-============================================================
-  Python       : 3.11.x
-  PyTorch      : 2.x.x
-  Device       : MPS (Apple Silicon GPU)   # or CUDA / CPU
-  OpenCV       : 4.x.x
-  PySide6      : 6.x.x
-  MindVision   : [OK] 1 camera(s) detected
-============================================================
-```
-
 ---
 
-## Data Preparation
+## Data Layout
 
-### Option A --- GUI (easiest)
-
-```bash
-python deep_learning_gui.py
-```
-
-Go to the **Video Extraction** tab, select your video folder and output folder,
-set the frame count, and click **Start Extraction**.
-
-### Option B --- `run_pipeline.py` (automated)
-
-Place videos in `video_capture/` named `A.avi`, `B.avi`, ..., then:
-
-```bash
-python run_pipeline.py --frames 300
-```
-
-### Option C --- Manual with ffmpeg
-
-```bash
-ffmpeg -i A.avi -vf "fps=10,format=gray" -frames:v 300 screenshots/A/frame_%05d.png
-```
-
-### Required layout after extraction
+Video files are organized by domain, fiber, and letter:
 
 ```
-screenshots/
-|-- A/
-|   |-- frame_00001.png
-|   |-- frame_00002.png
-|   +-- ...  (>= 300 frames recommended)
-|-- B/
-+-- Z/
+videocapture/
+|-- Green/
+|   |-- Fiber1/
+|   |   |-- A.avi
+|   |   |-- B.avi
+|   |   +-- ... Z.avi
+|   |-- Fiber2/
+|   +-- ... Fiber5/
+|-- GreenAndRed/
+|   |-- Fiber1/ ... Fiber5/
++-- RedChange/
+    |-- Fiber1/ ... Fiber5/
 ```
 
-> The folder name **is** the class label. Keep names consistent with the
-> letter encodings used during recording.
+Each `.avi` file contains ~200 frames of speckle video captured while a specific letter pattern is displayed on the SLM. The file name (without extension) is the class label.
 
 ---
 
 ## Training Workflows
 
-### 1. Single-fiber decode (recommended)
+### 1. Single-fiber training
 
-Trains a video-clip model (ResNet18 + temporal pooling) for one fiber.
-Uses a strict **temporal split** (70% train / 15% val / 15% test) to prevent
-data leakage between splits from the same video.
+Train a video-clip model (ResNet18 + temporal average pooling) for one fiber. Uses a strict temporal split (70/15/15) within each video to prevent frame-level data leakage.
 
 ```bash
-# Basic usage
 python scripts/train_fiber.py --fiber fiber1
-
-# Custom hyperparameters
-python scripts/train_fiber.py \
-    --fiber fiber1 \
-    --model_type cnn_pool \
-    --clip_len 16 \
-    --stride 8 \
-    --img_size 224 \
-    --epochs 50 \
-    --lr 1e-4 \
-    --batch_size 8 \
-    --patience 10
+python scripts/train_fiber.py --fiber fiber1 --model_type cnn_pool --clip_len 16 --stride 8 --epochs 50 --lr 1e-4
 ```
 
-**Outputs:**
+Outputs are saved to `results/<fiber>/` and `checkpoints/<fiber>_best.pth`.
 
-| File | Description |
-|------|-------------|
-| `results/<fiber>/best_model.pth` | Best checkpoint (by val accuracy) |
-| `results/<fiber>/confusion_matrix.png` | Confusion matrix on the test set |
-| `results/<fiber>/training_log.csv` | Per-epoch loss and accuracy |
-| `results/<fiber>/per_class_metrics.csv` | Precision / recall / F1 per class |
-| `results/<fiber>/test_predictions.csv` | Per-clip test predictions |
-| `results/<fiber>/classification_report.txt` | Full sklearn classification report |
-| `results/<fiber>/loss_acc_curve.png` | Training curves plot |
-| `results/<fiber>/metrics.json` | Summary metrics and sanity-check warnings |
-| `checkpoints/<fiber>_best.pth` | Copy of best model for live demo |
+| Output file | Content |
+|-------------|---------|
+| `best_model.pth` | Best model checkpoint (by validation accuracy) |
+| `confusion_matrix.png` | Test set confusion matrix |
+| `training_log.csv` | Per-epoch loss and accuracy |
+| `per_class_metrics.csv` | Per-class precision, recall, F1 |
+| `test_predictions.csv` | Per-clip predictions with confidence |
+| `classification_report.txt` | Full classification report |
+| `metrics.json` | Summary metrics |
 
-**Training log example:**
+### 2. Multi-fiber batch training
 
-```
-================================================================================
-  Speckle-PUF  |  Training fiber: fiber1
-================================================================================
-  Device       : mps
-  GPU          : Apple Silicon GPU (MPS)
-  Model type   : cnn_pool
-  Epochs       : 50
-
- * Epoch 001/050 | train_loss=3.2541  train_acc= 12.35% | val_loss=3.1024  val_acc= 10.80%
-   Epoch 002/050 | train_loss=2.8103  train_acc= 28.14% | val_loss=2.6892  val_acc= 25.62%
- * Epoch 003/050 | train_loss=2.1456  train_acc= 51.23% | val_loss=1.8721  val_acc= 49.35%
-   ...
-================================================================================
-  Training complete. Best validation accuracy: 94.20%
-================================================================================
-
-================================================================================
-  Test results:  loss = 0.2103,  accuracy = 93.87%
-================================================================================
-```
-
----
-
-### 2. End-to-end pipeline
-
-Runs frame extraction + training + evaluation in one command.
-
-```bash
-python run_pipeline.py
-python run_pipeline.py --frames 400 --epochs 80 --lr 5e-4
-python run_pipeline.py --skip-extract   # if frames already exist
-```
-
----
-
-### 3. Multi-fiber training (all fibers)
-
-Trains a separate video-clip model for each fiber sequentially.
+Train models for all five fibers sequentially:
 
 ```bash
 python scripts/train_all_fibers.py
 python scripts/train_all_fibers.py --epochs 50 --lr 1e-4
-python scripts/train_all_fibers.py --skip Fiber3 Fiber4
 python scripts/train_all_fibers.py --only Fiber1 Fiber2
+python scripts/train_all_fibers.py --skip Fiber3
 ```
 
-**Expected data structure:**
+### 3. Fiber-PUF authentication evaluation
 
-```
-video_capture/
-|-- fiber1/
-|   |-- A.avi
-|   |-- B.avi
-|   +-- ...
-|-- fiber2/
-+-- fiber5/
-```
-
-**Summary table example:**
-
-```
-================================================================================
-  Training Summary  (total: 1243s)
-================================================================================
-  Fiber                 Status    Val Acc   Test Acc      Time
-  ------------------------------------------------------------
-  fiber1                ok         94.50%     93.20%      245s
-  fiber2                ok         96.10%     95.40%      251s
-  fiber3                ok         92.30%     91.80%      249s
-```
-
----
-
-### 4. Video-clip model (R3D / CNN-Pool)
+This is the core experiment for the PUF paper. It trains one model per fiber (using all three illumination domains with temporal splitting), then evaluates each model against all five fibers to produce a 5x5 authentication matrix.
 
 ```bash
-# CNN + temporal average pooling (default, more stable)
-python main.py --data_dir video_capture --model_type cnn_pool --clip_len 16 --epochs 30
-
-# 3D ResNet (R3D-18)
-python main.py --data_dir video_capture --model_type r3d --clip_len 16 --epochs 30
+python scripts/fiber_auth_eval.py
 ```
 
-| Model | Strength | Best for |
-|-------|----------|----------|
-| `SimpleCNN` (train_model.py) | Fast, stable, uses ImageNet pretraining | Small datasets, quick experiments |
-| `cnn_pool` (scripts/train_fiber.py) | Temporal aggregation, ImageNet pretraining | Multi-video per class |
-| `r3d` | Rich spatio-temporal features | Large datasets with temporal dynamics |
+Outputs in `results/fiber_auth/`:
+
+| Output file | Content |
+|-------------|---------|
+| `auth_matrix.csv` | 5x5 accuracy matrix |
+| `auth_matrix.json` | Full results including per-domain breakdown |
+| `auth_summary.txt` | Human-readable summary |
+| `fiber_models/Fiber1.pth` ... `Fiber5.pth` | Per-fiber trained models |
+
+Expected result pattern:
+
+- **Diagonal (authorized)**: high accuracy (>92%) — the fiber's own model recognizes its letters
+- **Off-diagonal (unauthorized)**: near-chance accuracy (~4%) — other fibers cannot be decoded
+- **Authentication gap**: >90 percentage points
+
+### 4. Unified multi-domain training
+
+Train a single model on all fibers and domains simultaneously. Supports multiple split strategies:
+
+```bash
+# Deploy mode: temporal split within each video, all fibers
+python train_unified.py --split_mode deploy --epochs 20
+
+# Cross-fiber mode: hold out entire fibers for testing
+python train_unified.py --split_mode cross_fiber --epochs 20
+
+# Evaluate a trained unified model
+python evaluate_unified.py --checkpoint results/unified/best_model.pth
+```
+
+### 5. Domain ablation study
+
+Test the effect of different illumination domains on recognition accuracy:
+
+```bash
+# Single fiber
+python scripts/diagnose_domains.py --fiber Fiber1
+
+# All fibers
+python scripts/run_all_fiber_ablations.py
+```
+
+This compares three conditions: Green only, Green + GreenAndRed, and all three domains combined.
 
 ---
 
 ## Inference
 
+### Command-line prediction
+
 ```bash
-# Predict all frames in a folder + majority vote
-python predict.py --model model.pth --test-dir screenshots/A
-
-# With ground truth
-python predict.py --model model.pth --test-dir screenshots/A --ground-truth A
-
-# Top-3 predictions per frame
-python predict.py --model model.pth --test-dir screenshots/A --ground-truth A --top-k 3
+python predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A
+python predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A --ground-truth A --top-k 3
 ```
 
-**Example output:**
+### Programmatic usage
 
-```
-=================================================================
-  Filename                       Prediction   Confidence
------------------------------------------------------------------
-  frame_00256.png                A             98.72%
-  frame_00257.png                A             97.44%
-  frame_00258.png                B             61.23%
-=================================================================
+```python
+import torch
+from models import CNNPoolModel
 
-Video-level majority vote: A
-Frame-level counts: {'A': 43, 'B': 2}
-
-Ground truth : A
-Frame accuracy: 95.6%
-Video result : CORRECT  (vote=A, truth=A)
+model = CNNPoolModel(num_classes=26)
+checkpoint = torch.load("checkpoints/fiber1_best.pth", map_location="cpu")
+model.load_state_dict(checkpoint["model_state_dict"])
+model.eval()
 ```
 
 ---
 
 ## Live Demo GUI
 
-The PySide6-based live demo is the primary interactive interface. It provides:
-
-- **SLM output** --- display letters or phase patterns on a second monitor
-- **Live CCD feed** --- capture speckle images from a MindVision CCD or any webcam
-- **Real-time recognition** --- run the trained model on live frames with smoothed predictions
-- **Camera controls** --- exposure, gain, flip, auto-exposure, etc.
+The PySide6-based GUI provides real-time fiber-PUF authentication:
 
 ```bash
 python scripts/launch_demo.py
 ```
 
-See **[GUI_TUTORIAL.md](GUI_TUTORIAL.md)** for a full step-by-step walkthrough.
+Features:
+- **Fiber selector**: choose Fiber1–Fiber5, auto-loads the corresponding model from `results/fiber_auth/fiber_models/`
+- **SLM display**: shows letter patterns on a second monitor (Calibri Bold, matching data collection)
+- **Live camera feed**: capture speckle images from a MindVision CCD or any USB camera
+- **Real-time prediction**: displays predicted letter and confidence with low-confidence warning
+- **Camera controls**: exposure, gain, flip, auto-exposure
 
-### Sharing pre-trained models with colleagues
+The GUI expects trained models at `results/fiber_auth/fiber_models/FiberX.pth`. Run `scripts/fiber_auth_eval.py` first to generate them.
 
-To let others use the demo without training, share these files:
+### Sharing with colleagues (no re-training needed)
 
-| What to share | Purpose |
-|---------------|---------|
-| Entire `gui/` folder | GUI code + bundled SDK libraries |
+To run the demo on another machine, share these files:
+
+| Files | Purpose |
+|-------|---------|
+| `gui/` | GUI code + bundled camera SDK |
 | `scripts/launch_demo.py` | Entry point |
-| `checkpoints/*.pth` | Trained model weights |
-| `models.py`, `dataset.py` | Required by inference |
-| `requirements.txt` | Dependency list |
+| `results/fiber_auth/fiber_models/*.pth` | Trained models (5 files, ~43 MB each) |
+| `models.py` | Model architecture definition |
+| `letter_images/` | SLM letter PNGs |
+| `requirements.txt` | Dependencies |
 
-Large folders like `video_capture/` and `results/` are **not needed** for the demo.
+The `videocapture/`, `results/` (other than fiber_models), and `checkpoints/` directories are **not needed** for the demo.
 
----
-
-## Legacy GUI (Tkinter)
-
-The original Tkinter-based GUI is still available for frame extraction, training,
-prediction, and feature visualization:
-
-```bash
-python deep_learning_gui.py
-```
+See [GUI_TUTORIAL.md](GUI_TUTORIAL.md) for a detailed walkthrough.
 
 ---
 
-## Cross-Fiber Evaluation
+## Publication Figure Generation
 
-Evaluates how well a model trained on one fiber generalizes to unseen fibers.
+Generate all paper figures from existing experimental results:
 
 ```bash
-python scripts/evaluate_cross_fiber.py
+python scripts/make_paper_figures.py
 ```
 
-**Outputs:**
+This produces 8 figures in `figures/` (PNG at 600 dpi, PDF vector, and SVG), using a shared style defined in `scripts/plot_style.py`:
 
-```
-results/cross_fiber/
-|-- cross_fiber_heatmap.png    # accuracy heatmap: train_fiber x test_fiber
-|-- cross_fiber_accuracy.csv   # raw accuracy matrix
-|-- cross_fiber_results.json   # detailed per-class results
-+-- summary.md                 # markdown summary table
-```
+| Figure | File | Description |
+|--------|------|-------------|
+| Auth heatmap | `fig_auth_matrix` | 5x5 fiber authentication accuracy matrix |
+| Per-domain bars | `fig_same_fiber_per_domain` | Same-fiber accuracy across 3 illumination domains |
+| Auth gap | `fig_auth_gap` | Authorized vs unauthorized accuracy comparison |
+| Score distributions | `fig_auth_scores` | Confidence and cross-fiber accuracy histograms |
+| Speckle examples | `fig_speckle_examples` | Representative speckle images across fibers and domains |
+| NCC / HD | `fig_ncc_hd` | Normalized cross-correlation and Hamming distance distributions |
+| Training curves | `fig_training_curves` | Loss and validation accuracy during training |
+| Accuracy summary | `fig_test_accuracy_summary` | Per-fiber test accuracy bar chart |
+
+All figures use a consistent colorblind-friendly palette and journal-quality formatting.
+
+---
+
+## Authentication Results
+
+### 5x5 Fiber Authentication Matrix
+
+Each row is a fiber-specific model; each column is test data from a fiber. Diagonal entries are authorized (same-fiber) accuracy; off-diagonal entries are unauthorized (cross-fiber attack) accuracy.
+
+| Model \ Data | Fiber1 | Fiber2 | Fiber3 | Fiber4 | Fiber5 |
+|:-------------|-------:|-------:|-------:|-------:|-------:|
+| **Fiber1** | **97.4** | 5.1 | 5.3 | 2.5 | 1.4 |
+| **Fiber2** | 3.1 | **95.3** | 3.4 | 3.7 | 4.6 |
+| **Fiber3** | 4.8 | 3.8 | **92.9** | 5.9 | 4.7 |
+| **Fiber4** | 3.3 | 3.8 | 4.3 | **98.7** | 2.3 |
+| **Fiber5** | 4.3 | 5.4 | 5.0 | 2.6 | **93.6** |
+
+| Metric | Value |
+|--------|-------|
+| Authorized (same-fiber) average | **95.6%** |
+| Unauthorized (cross-fiber) average | **4.0%** |
+| Authentication gap | **91.6 pp** |
+| Chance level (1/26) | 3.85% |
+
+### Per-Domain Robustness
+
+Same-fiber accuracy under each illumination domain:
+
+| Fiber | Green only | Green+Red (fixed) | Green+Red (sweep) |
+|-------|----------:|-------------------:|-------------------:|
+| Fiber1 | 96.2% | 100.0% | 96.2% |
+| Fiber2 | 98.5% | 100.0% | 82.7% |
+| Fiber3 | 97.7% | 88.5% | 92.3% |
+| Fiber4 | 100.0% | 100.0% | 96.2% |
+| Fiber5 | 92.3% | 88.5% | 100.0% |
+
+### NCC / HD Uniqueness Metrics
+
+Computed from 800 genuine (intra-fiber) and 800 impostor (inter-fiber) speckle frame pairs:
+
+| Metric | Intra-fiber (genuine) | Inter-fiber (impostor) |
+|--------|----------------------:|----------------------:|
+| NCC | 0.990 +/- 0.016 | 0.878 +/- 0.023 |
+| HD | 0.022 +/- 0.014 | 0.105 +/- 0.020 |
 
 ---
 
 ## Model Architecture
 
-### SimpleCNN (used by `train_model.py` and `deep_learning_gui.py`)
+### CNNPoolModel (primary model)
+
+Used by `scripts/train_fiber.py` and `scripts/fiber_auth_eval.py`.
 
 ```
-Input (1 x H x W)
-  -> Conv2d(1->32, 3x3) + BN + ReLU + MaxPool(2)
-  -> Conv2d(32->64, 3x3) + BN + ReLU + MaxPool(2)
-  -> Conv2d(64->128, 3x3) + BN + ReLU + MaxPool(2)
-  -> Conv2d(128->256, 3x3) + BN + ReLU + MaxPool(2)
-  -> Flatten
-  -> Linear(256*(H/16)^2, 512) + ReLU + Dropout(0.5)
-  -> Linear(512, num_classes)
-```
-
-### CNNPoolModel (used by `scripts/train_fiber.py`)
-
-```
-Input clip (B, T, C, H, W)
-  -> ResNet18 backbone (ImageNet pretrained, FC removed)
-  -> Per-frame 512-dim features  (B*T, 512)
-  -> Reshape to (B, T, 512)
-  -> Temporal average pooling  -> (B, 512)
+Input video clip: (batch, T, C, H, W)
+  -> ResNet-18 backbone (ImageNet pretrained, final FC removed)
+  -> Per-frame features: (batch * T, 512)
+  -> Reshape: (batch, T, 512)
+  -> Temporal average pooling: (batch, 512)
   -> Dropout(0.3)
-  -> Linear(512, num_classes)
+  -> Linear(512, 26)
 ```
 
-### Temporal Split (no data leakage)
+### R3DModel (alternative)
+
+3D ResNet-18 for spatio-temporal feature extraction. Use with `--model_type r3d`.
+
+### SimpleCNN (legacy)
+
+Used by `train_model.py` and `deep_learning_gui.py` for single-frame classification.
+
+### Temporal Split Strategy
+
+To prevent data leakage, frames within each video are split by time:
 
 ```
-One video per class, N frames total:
-
-Frame  1  ...  0.70N    ->  train
-Frame 0.70N ... 0.85N   ->  val
-Frame 0.85N ... N       ->  test
-
-Clips from the same time window never appear in both train and test.
+Frame index:  1 .......... 0.70*N .......... 0.85*N .......... N
+              [    Train    ][    Val    ][    Test    ]
 ```
+
+Clips are constructed from consecutive frames within each split. No clip straddles split boundaries.
 
 ---
 
-## MindVision CCD Camera Support
+## Hardware Support
 
-The project includes native support for MindVision / HuaTengVision USB cameras
-(e.g., HT-UBS300C) on both macOS and Windows.
+### MindVision CCD Camera
 
-### macOS (Apple Silicon)
+The system supports MindVision / HuaTengVision USB cameras (e.g., HT-UBS300C) on macOS and Windows.
 
-The SDK library `libmvsdk.dylib` is pre-bundled in `gui/` and ad-hoc signed.
-No additional setup is needed --- plug in the camera and click "MindVision CCD"
-in the GUI.
+**macOS (Apple Silicon):** `gui/libmvsdk.dylib` is bundled and ad-hoc signed. Plug in the camera and select "MindVision CCD" in the GUI.
 
-### Windows (x64)
+**Windows (x64):** DLLs are bundled in `gui/win_sdk/`. First-time USB driver setup:
+1. Plug in the camera
+2. Open Device Manager
+3. Right-click the camera, select Update Driver -> Browse -> point to `gui/win_sdk/drivers/`
 
-All required DLLs are pre-bundled in `gui/win_sdk/`:
+### Other Cameras
 
-| File | Purpose |
-|------|---------|
-| `MVCAMSDK_X64.dll` | Main SDK library (11 MB) |
-| `MVImageProcess_X64.DLL` | ISP image processing |
-| `hAcqHuaTengVision*_X64.dll` | Hardware abstraction layer |
-| `Usb2/Usb3Camera*.Interface` | USB interface plugins |
-| `drivers/MvU2Camera.*` | USB driver (install once per machine) |
-
-**First-time USB driver setup:**
-
-1. Plug in the camera.
-2. Open **Device Manager**.
-3. Right-click the camera (may show as "Unknown Device").
-4. Select **Update Driver** -> **Browse my computer** -> point to `gui/win_sdk/drivers/`.
-5. After driver installation, the camera appears as a MindVision device.
-
-> On Windows, the HT-UBS300C also registers as a DirectShow device after driver
-> installation. This means the standard **Start Camera** button (OpenCV path)
-> often works without the MindVision SDK button. Use whichever works for your setup.
-
-### Other cameras
-
-Any UVC-compatible USB camera or webcam works out of the box via the
-**Start Camera** button (OpenCV). No SDK is needed.
-
----
-
-## Results
-
-Example results on a 5-fiber, 26-letter dataset:
-
-| Fiber | Best Val Acc | Test Acc |
-|-------|-------------|----------|
-| fiber1 | 94.50% | 93.20% |
-| fiber2 | 96.10% | 95.40% |
-| fiber3 | 92.30% | 91.80% |
-| fiber4 | 95.70% | 94.90% |
-| fiber5 | 93.80% | 93.10% |
-| **Average** | **94.48%** | **93.68%** |
+Any UVC-compatible USB camera or webcam works via the OpenCV camera button. No SDK needed.
 
 ---
 
 ## FAQ
 
-**Q: GPU not detected?**
+**Q: How do I reproduce the 5x5 authentication matrix?**
 
+Place your video data in `videocapture/{Green,GreenAndRed,RedChange}/Fiber{1-5}/`, then run:
 ```bash
-python -c "import torch; print(torch.cuda.is_available()); print(torch.backends.mps.is_available())"
+python scripts/fiber_auth_eval.py
 ```
 
-- NVIDIA: reinstall CUDA PyTorch (`pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121`)
-- Apple Silicon: MPS is used automatically with PyTorch >= 1.13
+**Q: GPU not detected?**
+```bash
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('MPS:', torch.backends.mps.is_available())"
+```
 
-**Q: Training accuracy stays below 20%?**
-- Ensure each class has at least 300 frames
-- Try a lower learning rate: `--lr 1e-4`
-- Check that images contain actual speckle patterns (not black/white frames)
+**Q: Training accuracy stays low?**
+- Ensure each video has at least 150 frames
+- Try `--lr 1e-4`
+- Verify videos contain actual speckle patterns
 
-**Q: Val accuracy is high but test accuracy drops significantly?**
-- Speckle drifts over time (temperature, mechanical vibration). Lower patience: `--patience 5`
-- Collect recordings at different times for a more robust test set
+**Q: Can I use custom class names instead of A-Z?**
 
-**Q: MindVision camera not detected on macOS?**
-- Check System Settings -> Privacy & Security -> Camera
-- Run `codesign --force --sign - gui/libmvsdk.dylib` if you get a code signature error
-- Wait 3 seconds after plugging in, then try again
+Yes. Class labels are derived from video filenames automatically.
 
-**Q: MindVision camera not detected on Windows?**
-- Install the USB driver from `gui/win_sdk/drivers/` via Device Manager
-- Verify the camera appears in Device Manager as a MindVision device
-- Check that `gui/win_sdk/MVCAMSDK_X64.dll` exists
+**Q: How do I add a new fiber?**
 
-**Q: Can I use a different camera?**
-- Any UVC-compatible USB camera works via the "Start Camera" (OpenCV) button
-- For cameras with proprietary SDKs, write a new worker class following the pattern in `gui/mv_camera_worker.py`
-
-**Q: Can I use my own class names (not A-Z)?**
-- Yes. Class names are read directly from folder names or video filenames
+1. Record 26 letter videos under each domain directory
+2. Name the fiber folder (e.g., `Fiber6`)
+3. Re-run `scripts/fiber_auth_eval.py`
 
 ---
 
 ## License
 
-MIT License --- see [LICENSE](LICENSE) for details.
+MIT License

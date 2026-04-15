@@ -33,12 +33,18 @@ test_predictions.csv
 
 # Video data (too large to commit)
 video_capture/
+videocapture/
 videos/
 screenshots/
 data/
 
 # Temporary utility scripts
 check_gpu.py
+
+# Paper drafts and archives
+*.docx
+*.pptx
+*.zip
 
 # Jupyter
 .ipynb_checkpoints/
