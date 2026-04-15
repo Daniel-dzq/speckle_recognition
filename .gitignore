@@ -46,6 +46,9 @@ check_gpu.py
 *.pptx
 *.zip
 
+# Generated figures (regenerate with: python scripts/make_paper_figures.py)
+figures/
+
 # Jupyter
 .ipynb_checkpoints/
 
