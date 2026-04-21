@@ -1,4 +1,12 @@
-# Speckle-PUF Recognition — Usage Guide
+# Speckle-PUF Recognition — Legacy Usage Guide
+
+> **Legacy notice.** This document describes the **pre-refactor** workflow
+> centred on the Tkinter GUI (`deep_learning_gui.py`) and the frame-level
+> `train_model.py` CLI. Both files now live under [`archive/`](../../archive)
+> for historical reference. The active workflow is documented in the top-level
+> [`README.md`](../../README.md) (training / inference / live demo) and in
+> [`docs/experiments.md`](../experiments.md) (paper-section experiment
+> framework). The notes below are preserved verbatim only for context.
 
 > **Project background**: This project implements speckle-PUF recognition for
 > SLM-encoded + multimode/plastic-fiber speckle experiments.

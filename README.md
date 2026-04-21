@@ -8,6 +8,7 @@ The system encodes letters (A–Z) onto a Spatial Light Modulator (SLM), injects
 
 ## Table of Contents
 
+- [Project Status & What's New](#project-status--whats-new)
 - [System Overview](#system-overview)
 - [Repository Structure](#repository-structure)
 - [Installation](#installation)
@@ -18,13 +19,48 @@ The system encodes letters (A–Z) onto a Spatial Light Modulator (SLM), injects
   - [Fiber-PUF authentication evaluation](#3-fiber-puf-authentication-evaluation)
   - [Unified multi-domain training](#4-unified-multi-domain-training)
   - [Domain ablation study](#5-domain-ablation-study)
+- [Experiment Framework (`analysis/`)](#experiment-framework-analysis)
 - [Inference](#inference)
 - [Live Demo GUI](#live-demo-gui)
+- [Experiment Result Dashboard](#experiment-result-dashboard)
 - [Publication Figure Generation](#publication-figure-generation)
 - [Authentication Results](#authentication-results)
 - [Model Architecture](#model-architecture)
 - [Hardware Support](#hardware-support)
+- [Migration Guide (from pre-refactor layout)](#migration-guide-from-pre-refactor-layout)
 - [FAQ](#faq)
+
+---
+
+## Project Status & What's New
+
+This repository now ships **two complementary layers**:
+
+1. **Recognition & training stack** (original codebase). Deep-learning models,
+   datasets, training loops, real-time demo GUI — unchanged in behaviour, just
+   reorganised into a cleaner layout (see [Migration Guide](#migration-guide-from-pre-refactor-layout)).
+2. **Experiment framework** in [`analysis/`](analysis/) (new). A config-driven,
+   reproducible pipeline that orchestrates every experiment and figure in the
+   paper — sections 3.1 through 3.6 — and writes structured artefacts under
+   `results/<run-name>/`. See [`docs/experiments.md`](docs/experiments.md).
+
+### Highlights of the latest refactor
+
+- **Polished experiment framework** (`analysis/`): dataset ingestion, caching,
+  preprocessing, metrics, journal-grade plotting, Markdown/CSV/JSON reporting,
+  and one reusable `BaseExperiment` that drives all six paper experiments.
+- **Unified CLI runner**: `python scripts/run_experiment.py <name> --config ...`
+  plus one convenience script per experiment.
+- **PySide6 experiment dashboard**: dark-themed, modern result browser that
+  scans `results/` for runs and shows their figures, tables, Markdown report,
+  and log in one window (`python scripts/launch_dashboard.py`).
+- **Clean root**: all loose training / debugging / legacy scripts have been
+  moved either into `scripts/` (active entry points) or `archive/` (legacy).
+- **English-only source**: every code, config, log, UI string and comment is
+  in English. The Chinese paper draft is isolated under `archive/paper_draft.docx`
+  (binary, ignored by git).
+- **Hardened `.gitignore`**: grouped by concern, scoped rules, no accidental
+  matches inside `results/`.
 
 ---
 
@@ -61,62 +97,99 @@ The system encodes letters (A–Z) onto a Spatial Light Modulator (SLM), injects
 ## Repository Structure
 
 ```
-speckle_recognition/
-|
-|-- scripts/
-|   |-- train_fiber.py              Single-fiber model training
-|   |-- train_all_fibers.py         Batch training for all fibers
-|   |-- fiber_auth_eval.py          Fiber-PUF authentication evaluation (5x5 matrix)
-|   |-- diagnose_domains.py         Domain ablation study
-|   |-- run_all_fiber_ablations.py  Run ablation across all fibers
-|   |-- evaluate_cross_fiber.py     Cross-fiber generalization test
-|   |-- export_letter_images.py     Export SLM letter images from PowerPoint
-|   |-- launch_demo.py              Launch the live demo GUI
-|   |-- env_check.py                Environment and dependency check
-|   |-- make_paper_figures.py       Generate publication-quality figures
-|   +-- plot_style.py               Shared plotting style for figures
-|
-|-- gui/
-|   |-- main_window.py              Main GUI window (PySide6)
-|   |-- slm_window.py               SLM output display window
-|   |-- camera_worker.py            OpenCV camera capture thread
-|   |-- mv_camera_worker.py         MindVision SDK camera thread
-|   |-- inference_worker.py         Real-time CNN inference thread
-|   |-- mvsdk.py                    MindVision Python ctypes wrapper
-|   |-- __init__.py
-|   |-- libmvsdk.dylib              MindVision SDK (macOS arm64)
-|   +-- win_sdk/                    MindVision SDK DLLs + drivers (Windows x64)
-|
-|-- models.py                       CNN architectures (CNNPoolModel, R3DModel, SimpleCNN)
-|-- dataset.py                      Video-clip dataset with temporal split
-|-- unified_dataset.py              Multi-domain unified dataset with caching
-|-- train_eval.py                   Training loop, evaluation, metrics export
-|-- train_unified.py                Unified multi-domain training entry point
-|-- evaluate_unified.py             Unified model evaluation with domain/fiber breakdown
-|-- predict.py                      Frame-level inference with majority vote
-|-- train_model.py                  Frame-level SimpleCNN training
-|-- run_pipeline.py                 End-to-end extraction + training pipeline
-|-- deep_learning_gui.py            Legacy Tkinter GUI
-|-- visualize_features.py           Feature visualization utilities
-|
-|-- letter_images/                  Pre-rendered SLM letter PNGs (A-Z, Calibri Bold)
-|-- figures/                        Publication figures (PNG 600dpi + PDF + SVG)
-|-- requirements.txt                Python dependencies
-|-- README.md                       This file
-|-- GUI_TUTORIAL.md                 Step-by-step live demo tutorial
-+-- USAGE.md                        Additional usage notes
+speckle_recognition-main/
+│
+├── README.md                       This file
+├── requirements.txt                Python dependencies
+├── .gitignore
+│
+├── models.py                       CNN architectures (CNNPoolModel, R3DModel, SimpleCNN)
+├── dataset.py                      Video-clip dataset with temporal split
+├── unified_dataset.py              Multi-domain unified dataset with caching
+├── train_eval.py                   Training loop, evaluation, metrics export
+│
+├── scripts/                        All command-line entry points
+│   ├── train_single_fiber.py       Single-fiber training (default entry)
+│   ├── train_fiber.py              Scripted per-fiber training with rich logging
+│   ├── train_all_fibers.py         Batch training across all fibers
+│   ├── train_unified.py            Unified multi-domain training
+│   ├── evaluate_unified.py         Unified model evaluation
+│   ├── evaluate_cross_fiber.py     Cross-fiber generalisation test
+│   ├── fiber_auth_eval.py          Fiber-PUF authentication evaluation (5x5 matrix)
+│   ├── diagnose_domains.py         Domain ablation
+│   ├── run_all_fiber_ablations.py  Ablations across fibers
+│   ├── predict.py                  Frame-level inference with majority vote
+│   ├── make_paper_figures.py       Regenerate publication figures
+│   ├── export_letter_images.py     Export SLM letter images from PowerPoint
+│   ├── env_check.py                Environment & dependency check
+│   ├── launch_demo.py              Launch the live demo GUI (PySide6)
+│   ├── launch_dashboard.py         Launch the experiment result browser (PySide6)
+│   ├── run_experiment.py           Unified analysis-framework runner
+│   ├── run_<name>.py               Per-experiment convenience wrappers
+│   └── plot_style.py               Shared legacy plotting style
+│
+├── gui/                            Live-demo + dashboard GUI (PySide6)
+│   ├── main_window.py              Demo main window
+│   ├── experiment_dashboard.py     Experiment result browser
+│   ├── slm_window.py               SLM output display
+│   ├── camera_worker.py            OpenCV camera capture thread
+│   ├── mv_camera_worker.py         MindVision SDK camera thread
+│   ├── inference_worker.py         Real-time CNN inference thread
+│   ├── mvsdk.py                    MindVision ctypes wrapper
+│   ├── libmvsdk.dylib              MindVision SDK (macOS arm64)
+│   └── win_sdk/                    MindVision SDK (Windows x64)
+│
+├── analysis/                       Experiment framework (paper sections 3.1 - 3.6)
+│   ├── utils/                      config, logging, seeding, typed dataclasses
+│   ├── io/                         video I/O, dataset discovery, manifests
+│   ├── caching/                    version-aware feature cache
+│   ├── preprocessing/              frame pipeline (ROI, resize, normalise, ...)
+│   ├── metrics/                    distances, auth metrics, profiles, stability
+│   ├── plotting/                   journal-grade matplotlib style + chart lib
+│   ├── reporting/                  JSON / CSV / Markdown writers
+│   └── experiments/                BaseExperiment + one class per paper section
+│
+├── config/                         YAML configs for every experiment
+│   ├── system_setup.yaml
+│   ├── length_optimization.yaml
+│   ├── dual_channel.yaml
+│   ├── common_mode.yaml
+│   ├── authentication.yaml
+│   └── demo.yaml
+│
+├── docs/
+│   ├── experiments.md              Analysis-framework reference
+│   ├── gui_tutorial.md             Live-demo GUI tutorial
+│   └── legacy/
+│       └── usage.md                Historical usage notes (pre-refactor CLI)
+│
+├── letter_images/                  Pre-rendered SLM letter PNGs (A-Z, Calibri Bold)
+│
+└── archive/                        Legacy / superseded / non-source files
+    ├── README.md                   Explains each archived file
+    ├── train_model.py              Pre-refactor frame-level trainer
+    ├── run_pipeline.py             Pre-refactor orchestrator
+    ├── deep_learning_gui.py        Pre-refactor Tkinter GUI
+    ├── train_video_cad_model*.py   CAD / random-forest baselines
+    ├── test_extract.py, test_ffmpeg.py  Ad-hoc debug scripts
+    ├── video_screenshot.py         One-shot frame grabber
+    ├── visualize_features.py       Legacy feature visualiser
+    ├── paper_draft.docx            Paper draft (binary, not tracked)
+    └── figures.zip                 Snapshot of publication figures (regenerable)
 ```
 
 **Directories created at runtime (not committed):**
 
 ```
 videocapture/                       Raw video data (3 domains x 5 fibers x 26 letters)
-results/                            Training outputs, metrics, predictions
-  |-- fiber1/ ... fiber5/           Per-fiber single-domain results
-  |-- fiber_auth/                   5x5 authentication matrix + per-fiber models
-  |-- unified/                      Unified multi-domain evaluation
-  +-- cross_fiber/                  Cross-fiber generalization results
+results/                            Training & experiment outputs
+  ├── fiber1/ ... fiber5/           Per-fiber single-domain results
+  ├── fiber_auth/                   5x5 authentication matrix + per-fiber models
+  ├── unified/                      Unified multi-domain evaluation
+  ├── cross_fiber/                  Cross-fiber generalisation results
+  └── <experiment-run>/             analysis/ experiment outputs (figures, tables, report.md)
 checkpoints/                        Model checkpoints (.pth)
+figures/                            Publication figures (regenerate via scripts/make_paper_figures.py)
 .cache/                             Decoded frame cache for fast reloading
 ```
 
@@ -243,13 +316,13 @@ Train a single model on all fibers and domains simultaneously. Supports multiple
 
 ```bash
 # Deploy mode: temporal split within each video, all fibers
-python train_unified.py --split_mode deploy --epochs 20
+python scripts/train_unified.py --split_mode deploy --epochs 20
 
 # Cross-fiber mode: hold out entire fibers for testing
-python train_unified.py --split_mode cross_fiber --epochs 20
+python scripts/train_unified.py --split_mode cross_fiber --epochs 20
 
 # Evaluate a trained unified model
-python evaluate_unified.py --checkpoint results/unified/best_model.pth
+python scripts/evaluate_unified.py --checkpoint results/unified/best_model.pth
 ```
 
 ### 5. Domain ablation study
@@ -268,13 +341,71 @@ This compares three conditions: Green only, Green + GreenAndRed, and all three d
 
 ---
 
+## Experiment Framework (`analysis/`)
+
+The `analysis/` package is a config-driven, reproducible pipeline that
+orchestrates every experiment and figure in the paper (sections 3.1 - 3.6).
+It sits alongside the training stack and reuses the same `videocapture/`
+data through a configurable `DatasetLayout`; no folder renaming required.
+
+### Pipeline at a glance
+
+```
+config/<exp>.yaml
+      |
+      v
+ExperimentConfig --> DatasetLayout --> discover_captures
+                                             |
+                                             v
+                            Pipeline (ROI / resize / normalise)
+                                             |
+                                             v
+                           extract_features (cached numpy)
+                                             |
+                                             v
+              metrics/ * + plotting/ * + reporting/ *
+                                             |
+                                             v
+results/<run>/  (figures/, tables/, report.md, summary.json, manifest.json, run.log)
+```
+
+### Running the experiments
+
+| Paper section | Experiment            | Command                                                                                       |
+| ------------- | --------------------- | --------------------------------------------------------------------------------------------- |
+| 3.1           | System setup audit    | `python scripts/run_experiment.py system_setup       --config config/system_setup.yaml`       |
+| 3.2           | Length optimisation   | `python scripts/run_experiment.py length_optimization --config config/length_optimization.yaml` |
+| 3.3           | Dual-channel          | `python scripts/run_experiment.py dual_channel       --config config/dual_channel.yaml`       |
+| 3.4           | Common-mode           | `python scripts/run_experiment.py common_mode        --config config/common_mode.yaml`        |
+| 3.5           | Authentication        | `python scripts/run_experiment.py authentication     --config config/authentication.yaml`     |
+| 3.6           | Demo (scripted/GUI)   | `python scripts/run_experiment.py demo               --config config/demo.yaml`               |
+
+All commands also have convenience wrappers: `python scripts/run_<name>.py`.
+Any dotted-key in the YAML can be overridden inline, e.g.
+`--set output.name=smoke --set seed=42`.
+
+### Result browser (PySide6)
+
+```
+python scripts/launch_dashboard.py           # scans ./results
+python scripts/launch_dashboard.py path/to/results
+```
+
+Dark-themed, modern dashboard with metric cards, figure gallery, CSV table
+viewer, markdown report reader and raw run-log tabs.
+
+See `docs/experiments.md` for the full reference (config schema, dataset
+layouts, extension points, performance & determinism notes).
+
+---
+
 ## Inference
 
 ### Command-line prediction
 
 ```bash
-python predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A
-python predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A --ground-truth A --top-k 3
+python scripts/predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A
+python scripts/predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A --ground-truth A --top-k 3
 ```
 
 ### Programmatic usage
@@ -323,7 +454,30 @@ To run the demo on another machine, share these files:
 
 The `videocapture/`, `results/` (other than fiber_models), and `checkpoints/` directories are **not needed** for the demo.
 
-See [GUI_TUTORIAL.md](GUI_TUTORIAL.md) for a detailed walkthrough.
+See [docs/gui_tutorial.md](docs/gui_tutorial.md) for a detailed walkthrough.
+
+---
+
+## Experiment Result Dashboard
+
+A second PySide6 window — the **experiment dashboard** — browses the structured
+outputs produced by the `analysis/` framework.
+
+```bash
+python scripts/launch_dashboard.py                 # scans ./results
+python scripts/launch_dashboard.py path/to/results
+```
+
+Features:
+- Dark-themed, modern layout with metric cards, figure gallery and tabbed viewer
+- Auto-discovery of every `results/<run>/` folder with a `manifest.json`,
+  `summary.json` or `report.md`
+- Tabs for **Figures** (click-to-open), **Tables** (CSV preview), **Report**
+  (Markdown), **Summary JSON**, and **Log** (raw `run.log`)
+- Refresh / open-folder controls and an instant status bar
+
+The dashboard is optional — every experiment also writes a self-contained
+Markdown report under `results/<run>/report.md` that can be read in any editor.
 
 ---
 
@@ -418,7 +572,7 @@ Input video clip: (batch, T, C, H, W)
 
 ### SimpleCNN (legacy)
 
-Used by `train_model.py` and `deep_learning_gui.py` for single-frame classification.
+Used by `archive/train_model.py` and `archive/deep_learning_gui.py` for single-frame classification.
 
 ### Temporal Split Strategy
 
@@ -449,6 +603,68 @@ The system supports MindVision / HuaTengVision USB cameras (e.g., HT-UBS300C) on
 ### Other Cameras
 
 Any UVC-compatible USB camera or webcam works via the OpenCV camera button. No SDK needed.
+
+---
+
+## Migration Guide (from pre-refactor layout)
+
+The older layout kept many loose Python files at the project root. They have
+been reorganised without changing behaviour; the table below maps every
+renamed / relocated file to its new home.
+
+### Entry-point scripts — moved to `scripts/`
+
+| Old path | New path | Notes |
+| -------- | -------- | ----- |
+| `main.py` | `scripts/train_single_fiber.py` | Renamed for clarity; same CLI flags |
+| `train_unified.py` | `scripts/train_unified.py` | Same CLI; `sys.path` patch added so imports keep working |
+| `evaluate_unified.py` | `scripts/evaluate_unified.py` | Same CLI |
+| `predict.py` | `scripts/predict.py` | Same CLI |
+
+All four added a 3-line repo-root patch at the top, so running them from
+anywhere (`python scripts/predict.py ...`) resolves imports correctly.
+
+### Legacy scripts — moved to `archive/` (preserved, not deleted)
+
+| Old path | Now at | Superseded by |
+| -------- | ------ | ------------- |
+| `train_model.py` | `archive/train_model.py` | `scripts/train_single_fiber.py`, `scripts/train_fiber.py` |
+| `run_pipeline.py` | `archive/run_pipeline.py` | `scripts/train_all_fibers.py` |
+| `deep_learning_gui.py` | `archive/deep_learning_gui.py` | `gui/main_window.py` (PySide6) |
+| `train_video_cad_model.py` | `archive/train_video_cad_model.py` | `scripts/train_unified.py` |
+| `train_video_cad_model_fixed.py` | `archive/train_video_cad_model_fixed.py` | `scripts/train_unified.py` |
+| `train_video_cad_model_final.py` | `archive/train_video_cad_model_final.py` | `scripts/train_unified.py` |
+| `visualize_features.py` | `archive/visualize_features.py` | `scripts/make_paper_figures.py`, `analysis/plotting/` |
+| `video_screenshot.py` | `archive/video_screenshot.py` | `gui/camera_worker.py`, `analysis/io/video.py` |
+| `test_extract.py`, `test_ffmpeg.py` | `archive/` | Ad-hoc debug (no successor) |
+
+See [archive/README.md](archive/README.md) for the per-file description.
+
+### Core library — **kept at repository root**
+
+`models.py`, `dataset.py`, `unified_dataset.py`, `train_eval.py` are still at
+the root so that every `from models import ...` / `from dataset import ...`
+call in the active scripts and GUI continues to resolve without edits.
+
+### Docs — consolidated under `docs/`
+
+| Old path | New path |
+| -------- | -------- |
+| `GUI_TUTORIAL.md` | `docs/gui_tutorial.md` |
+| `USAGE.md` | `docs/legacy/usage.md` (marked as pre-refactor reference) |
+| *(new)* `docs/experiments.md` | Full reference for the `analysis/` framework |
+
+### Binary non-source assets — moved to `archive/`
+
+| Old path | New path | Notes |
+| -------- | -------- | ----- |
+| `双通道激励多模光纤光学PUF与双因子认证.docx` | `archive/paper_draft.docx` | Renamed to ASCII; still gitignored |
+| `figures.zip` | `archive/figures.zip` | Regenerable via `scripts/make_paper_figures.py` |
+
+### Cleanup
+
+`__pycache__/`, `.cache/`, `.DS_Store` were removed. They are generated on
+demand and matched by the updated `.gitignore`.
 
 ---
 

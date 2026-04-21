@@ -33,6 +33,11 @@ from collections import defaultdict
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 if os.name == "nt":
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")

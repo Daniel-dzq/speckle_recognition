@@ -1,36 +1,31 @@
 #!/usr/bin/env python3
 """
-Speckle-PUF Video Recognition — Main Entry Point
-=================================================
-
-Background:
-  This is a speckle recognition experiment based on SLM + multimode/plastic fiber.
-  Input:  one speckle video per letter (A-Z)
-  Goal:   verify that deep learning can reliably distinguish the speckle patterns
-          produced by different SLM letter encodings after fiber transmission.
+Speckle-PUF Video Recognition — single-fiber training entry point.
 
 Usage examples:
-  # Default (CNN + Temporal Pooling):
-  python main.py --data_dir video_capture --epochs 30 --batch_size 8
+    # Default (CNN + Temporal Pooling)
+    python scripts/train_single_fiber.py --data_dir videocapture/Green/Fiber1 --epochs 30 --batch_size 8
 
-  # Use 3D CNN (R3D-18):
-  python main.py --data_dir video_capture --model_type r3d --epochs 30
+    # 3D CNN (R3D-18)
+    python scripts/train_single_fiber.py --data_dir videocapture/Green/Fiber1 --model_type r3d --epochs 30
 
-  # Fully customized:
-  python main.py --data_dir "C:\\Users\\daizi\\Desktop\\recognition\\video_capture" \\
-                 --model_type cnn_pool --clip_len 16 --stride 8 \\
-                 --img_size 224 --epochs 30 --batch_size 8 --lr 1e-4
+    # Fully customised
+    python scripts/train_single_fiber.py --data_dir path/to/videos \\
+        --model_type cnn_pool --clip_len 16 --stride 8 \\
+        --img_size 224 --epochs 30 --batch_size 8 --lr 1e-4
 """
 
 import os
+import sys
+import io
 
-# Avoid duplicate OpenMP library error on Windows with PyTorch + NumPy
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 if os.name == "nt":
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
 
-import sys
-import io
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")

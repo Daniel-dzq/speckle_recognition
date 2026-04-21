@@ -30,3 +30,8 @@ imageio-ffmpeg>=0.4.8
 
 # Live demo GUI (SLM control + real-time inference)
 PySide6>=6.5.0
+
+# Experiment framework (analysis/ package)
+PyYAML>=6.0
+scipy>=1.10.0
+pandas>=1.5.0

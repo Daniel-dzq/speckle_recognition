@@ -1,4 +1,6 @@
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *.pyo
@@ -8,59 +10,74 @@ __pycache__/
 dist/
 build/
 
+# ---------------------------------------------------------------------------
 # Virtual environments
+# ---------------------------------------------------------------------------
 venv/
 .venv/
 env/
 
-# Model weights (large files, not committed)
+# ---------------------------------------------------------------------------
+# Model weights (large, not committed — regenerate with scripts/train_*.py)
+# ---------------------------------------------------------------------------
 *.pth
 *.pt
 *.joblib
 *.pkl
 
-# Training outputs
+# ---------------------------------------------------------------------------
+# Generated outputs
+# ---------------------------------------------------------------------------
 output/
 results/
 checkpoints/
+figures/
+# Stray top-level evaluation artefacts (older scripts used to drop these here)
+/confusion_matrix.png
+/training_log.csv
+/per_class_metrics.csv
+/test_predictions.csv
 
-# Frame / manifest caches
+# ---------------------------------------------------------------------------
+# Caches
+# ---------------------------------------------------------------------------
 .cache/
-confusion_matrix.png
-training_log.csv
-per_class_metrics.csv
-test_predictions.csv
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Video data (too large to commit)
+# ---------------------------------------------------------------------------
+# Raw acquisition data (too large to commit)
+# ---------------------------------------------------------------------------
 video_capture/
 videocapture/
 videos/
 screenshots/
 data/
 
-# Temporary utility scripts
-check_gpu.py
+# ---------------------------------------------------------------------------
+# Paper drafts & binary archives (live under archive/)
+# ---------------------------------------------------------------------------
+archive/*.docx
+archive/*.pptx
+archive/*.zip
 
-# Paper drafts and archives
-*.docx
-*.pptx
-*.zip
-
-# Generated figures (regenerate with: python scripts/make_paper_figures.py)
-figures/
-
+# ---------------------------------------------------------------------------
 # Jupyter
+# ---------------------------------------------------------------------------
 .ipynb_checkpoints/
 
+# ---------------------------------------------------------------------------
 # IDE
+# ---------------------------------------------------------------------------
 .idea/
 .vscode/
 *.suo
 *.user
 
-# Windows
+# ---------------------------------------------------------------------------
+# OS
+# ---------------------------------------------------------------------------
+.DS_Store
 Thumbs.db
 desktop.ini
-
-# macOS
-.DS_Store

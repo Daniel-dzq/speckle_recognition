@@ -6,9 +6,9 @@ Speckle-PUF Inference Script
 Classify speckle frames in a folder, outputting per-frame predictions and video-level majority vote.
 
 Usage:
-  python predict.py --model model.pth --test-dir test/
-  python predict.py --model model.pth --test-dir screenshots/A --ground-truth A
-  python predict.py --model model.pth --test-dir screenshots/A --ground-truth A --top-k 3
+    python scripts/predict.py --model checkpoints/fiber1_best.pth --test-dir test/
+    python scripts/predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A --ground-truth A
+    python scripts/predict.py --model checkpoints/fiber1_best.pth --test-dir screenshots/A --ground-truth A --top-k 3
 """
 
 import os
@@ -23,7 +23,7 @@ from PIL import Image
 
 
 # ============================================================================
-#   SimpleCNN — must match train_model.py / deep_learning_gui.py exactly
+#   SimpleCNN — must match archive/train_model.py / archive/deep_learning_gui.py exactly
 #   Attribute names: self.features / self.classifier
 # ============================================================================
 

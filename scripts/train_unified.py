@@ -36,6 +36,11 @@ from collections import defaultdict
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 if os.name == "nt":
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 if sys.stdout.encoding != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
@@ -55,8 +60,6 @@ from unified_dataset import (
 )
 from models import get_model
 from train_eval import train_one_epoch, evaluate, _save_confusion_matrix
-
-ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
