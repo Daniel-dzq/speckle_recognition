@@ -1,0 +1,37 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.3 — Dual-channel characterisation
+# -----------------------------------------------------------------------------
+# Time stability, perturbation sensitivity, and spot/profile analysis for
+# green-only vs green+red acquisitions.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: dual_channel_analysis
+
+dataset:
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  domains: [Green, GreenAndRed, RedChange]
+  domain_map:
+    Green:       {channel: green,              condition: side_green}
+    GreenAndRed: {channel: green_red_fixed,    condition: dual_fixed}
+    RedChange:   {channel: green_red_dynamic,  condition: dual_dynamic}
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+
+perturbation:
+  baseline_condition: dual_fixed
+  perturbed_condition: dual_dynamic
+
+cache:
+  enabled: true

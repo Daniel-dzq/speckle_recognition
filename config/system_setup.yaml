@@ -1,0 +1,34 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.1 — System setup / acquisition sanity checks
+# -----------------------------------------------------------------------------
+# Audits the on-disk acquisition against the expected fiber x channel x
+# challenge grid. Also ingests optional power-meter metadata when available.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: system_setup
+
+dataset:
+  # Paths are resolved relative to this YAML file.
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  domains: [Green, GreenAndRed, RedChange]
+  domain_map:
+    Green:       {channel: green,              condition: side_green}
+    GreenAndRed: {channel: green_red_fixed,    condition: dual_fixed}
+    RedChange:   {channel: green_red_dynamic,  condition: dual_dynamic}
+
+acquisition:
+  expected_fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  expected_challenges: [A, B, C, D, E, F, G, H, I, J, K, L, M,
+                        N, O, P, Q, R, S, T, U, V, W, X, Y, Z]
+  min_frames: 50
+
+# Optional: CSV with columns `fiber,p_in_green,p_out_green,p_in_red,p_out_red`.
+# Used by the length-optimisation experiment too.
+power:
+  csv_path: null

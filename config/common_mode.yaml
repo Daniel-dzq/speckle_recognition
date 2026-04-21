@@ -1,0 +1,40 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.4 — Common-mode suppression evaluation
+# -----------------------------------------------------------------------------
+# Compares the raw green feature against the green/red ratio feature under
+# synchronised power variation and mechanical reinstall.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: common_mode_eval
+
+dataset:
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  domains: [GreenAndRed, RedChange]
+  domain_map:
+    GreenAndRed: {channel: green_red_fixed,    condition: dual_fixed}
+    RedChange:   {channel: green_red_dynamic,  condition: dual_dynamic}
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+
+power_fluctuation:
+  conditions: [dual_dynamic]
+
+reinstall:
+  # Populate with the condition tags that capture the reinstall protocol,
+  # e.g. ["reinstall_1", "reinstall_2", ...].
+  conditions: []
+
+cache:
+  enabled: true

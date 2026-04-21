@@ -1,0 +1,51 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.2 — Fiber length optimisation
+# -----------------------------------------------------------------------------
+# Evaluates multiple candidate fiber lengths on three axes:
+#   1) transmission loss (dB) [optional, needs power CSV]
+#   2) intra- and inter-class distance ratio
+#   3) pixel entropy on a configurable ROI
+# Recommends the length with the highest inter/intra ratio while keeping
+# the green-channel loss below `recommendation.green_loss_threshold_db`.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: length_optimization
+
+dataset:
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  domains: [Green]
+  # Map each fiber to a length group so the analysis can aggregate correctly.
+  fiber_lookup:
+    Fiber1: {length_group: 11cm, length_mm: 110}
+    Fiber2: {length_group: 17cm, length_mm: 170}
+    Fiber3: {length_group: 23cm, length_mm: 230}
+    Fiber4: {length_group: 29cm, length_mm: 290}
+    Fiber5: {length_group: 29cm, length_mm: 290}
+
+length_groups_order: [11cm, 17cm, 23cm, 29cm]
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+
+entropy:
+  roi: 400                 # Side length of the square ROI used for entropy
+
+recommendation:
+  green_loss_threshold_db: 10.0
+
+power:
+  csv_path: null           # e.g. ./power_measurements.csv (see system_setup.yaml)
+
+cache:
+  enabled: true

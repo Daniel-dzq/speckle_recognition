@@ -1,0 +1,39 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.5 — Authentication performance
+# -----------------------------------------------------------------------------
+# Enrollment/probe split with nearest-template classifier, confusion matrix,
+# ROC, AUC and EER, plus known- and unknown-challenge evaluation.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: authentication_eval
+
+dataset:
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  domains: [Green]
+  domain_map:
+    Green: {channel: green, condition: side_green}
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+
+split:
+  enroll_ratio: 0.5
+
+eval:
+  known_challenge: true
+  unknown_challenge: true
+  top_k: [1, 3, 5]
+
+cache:
+  enabled: true

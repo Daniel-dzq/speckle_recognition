@@ -1,0 +1,43 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.6 — Demo / live authentication
+# -----------------------------------------------------------------------------
+# Two modes are supported:
+#   mode: offline_script   (run a scripted replay against the enrolled templates)
+#   mode: gui              (launch scripts/launch_demo.py live demo window)
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: demo_runs
+
+mode: offline_script
+
+dataset:
+  root: ../videocapture
+  layout: domain_fiber_letter
+  fibers: [Fiber1, Fiber2, Fiber3]
+  domains: [Green]
+  domain_map:
+    Green: {channel: green, condition: side_green}
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+
+threshold: 0.6
+
+# Optional scripted sequence; if omitted, every (fiber, challenge) in the
+# dataset will be exercised once.
+script:
+  - {fiber: Fiber1, challenge: A}
+  - {fiber: Fiber2, challenge: B}
+  - {fiber: Fiber3, challenge: C}
+
+cache:
+  enabled: true
