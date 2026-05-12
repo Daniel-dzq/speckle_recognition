@@ -1,0 +1,4 @@
+# Ignore all generated assets under figures/; track only this file and .gitignore
+*
+!README.md
+!.gitignore

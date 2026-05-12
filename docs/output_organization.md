@@ -1,85 +1,75 @@
-# Where outputs live (figures, tables, raw bundles)
+# Output directories: roles and traceability
 
-Everything under `results/`, `figures/`, `figures_publication/`, and most large data trees is **gitignored**. The repository only holds the **code to regenerate** outputs. Use this note when you archive a “frozen” result set on disk.
+Generated data (videos, `results/`, most of `figures/`, weights) is typically **gitignored**. This document is the **primary map** for finding which folder answers which scientific or documentation question.
 
-## 1. Canonical per-experiment runs (`analysis/` framework)
+---
 
-**Path pattern:** `results/<run_name>/` (from `config/*.yaml` → `output.root` + `output.name`)
+## 1. Directory roles
 
-**Contents (typical):**
+| Location | Role |
+|----------|------|
+| **`results/<run_name>/`** | **Most traceable** output of the `analysis/` framework: `report.md`, `manifest.json`, `figures/`, `tables/`, `run.log`, optional `cache/`. One run = one config + one provenance record. |
+| **`figures/`** (repo root) | **Paper “main figure pack”**: mostly flat `fig_*` from **`scripts/make_paper_figures.py`**. Summarizes training + **fiber_auth** storyline; **not** tied to a single `results/<run>/` folder unless you document it. |
+| **`figures_publication/`** | **Journal typography** re-export from **`scripts/make_publication_figures.py`**. Does not overwrite root `figures/` by design. |
+| **`figures/softcopyright/`** | **GUI screenshots** for registration / legal packs (`scripts/capture_manual_screenshots.py`). **Not** core experimental science figures. |
+| **`figures/new_datasets_analysis/`** | **Extension-dataset** analysis plots (`scripts/analyze_new_datasets.py`). |
+| **`experiment_archive/`** | **Your** dated snapshots from **`scripts/archive_experiment_snapshot.py`** — local only, **never** commit. |
+| **`archive/`** | **Legacy code / old scripts** shipped with the repo (see `archive/README.md`). Not the same as `experiment_archive/`. |
+| **`checkpoints/`**, **`results/fiber*/`** | Training outputs from the **root training stack** (temporal-split trainers, etc.). |
+| **`results/fiber_auth/`** | **PUF matrix** evaluation outputs + **`fiber_models/*.pth`** expected by the live demo. |
+| **Historical campaign trees** (`LengthOptimize/`, `disturbance_sensitivity/`, `fiber_loss/`, `long_term_stability/`, `power_common_mode/`, `Green/`, …) | **Ad hoc or historical** data campaigns. **Do not move** without checking script paths; see `docs/repository_inventory.md` after running the inventory script. |
 
-| Item | Role |
-|------|------|
-| `report.md` | Human-readable narrative + list of artefacts |
-| `manifest.json` | Machine-readable run metadata |
-| `summary.json` | Quick numeric summary when present |
-| `figures/` | PNG/PDF/SVG produced **for this run only** |
-| `tables/` | CSV / small structured exports |
-| `run.log` | Text log |
-| `cache/` or nested cache | Derived numpy cache (optional) |
+---
 
-**How to know which figure belongs to which experiment:** open `results/<run_name>/report.md` or `manifest.json`; every plot registered via `ExperimentContext.add_plot` is listed there with filenames under `figures/`.
+## 2. How to identify a figure’s source (priority order)
 
-**CLI entry:** `python scripts/run_experiment.py <experiment> --config config/<name>.yaml`
+1. **`results/<run>/report.md`** — lists artefacts for that `analysis/` run (figures + captions + CSV sources).
+2. **`results/<run>/manifest.json`** — machine-readable list of inputs, git SHA, artefacts.
+3. **Flat `figures/fig_*`** — infer from **`scripts/make_paper_figures.py`** (grep the stem) and tie to **`results/fiber_auth/auth_matrix.json`**, per-fiber `results/fiber*/training_log.csv`, etc.
+4. **`docs/generated_figures_manifest.csv`** — run `python scripts/inventory_repository.py` to refresh a **filename → likely script** table for images under `figures/`.
+5. **`figures/README.md`** — explains the purpose of this directory vs single runs.
+6. **Git + command history** — `git rev-parse HEAD`, shell history, or metadata in **`experiment_archive/.../GIT_COMMIT.txt`** after you snapshot.
 
-This is the **primary** place for “formal” analysis experiments (paper sections 3.1–3.6 style).
+---
 
-## 2. Consolidated training / PUF paper figures (flat `figures/`)
+## 3. Recommended paper workflow
 
-**Generator:** `scripts/make_paper_figures.py`  
-**Reads from:** mainly `results/fiber_auth/`, per-fiber `results/fiber*/`, and `videocapture/`  
-**Writes to:** repo root `figures/` (flat), e.g. `fig_auth_matrix`, `fig_training_curves`, …
+1. **Run experiments** — `python scripts/run_experiment.py …` so each claim has a `results/<run>/` folder with `report.md` + `manifest.json`.
+2. **Generate consolidated paper figures** — `python scripts/make_paper_figures.py` (writes root `figures/`).
+3. **Optional journal pass** — `python scripts/make_publication_figures.py` → `figures_publication/`.
+4. **Archive a snapshot** — `python scripts/archive_experiment_snapshot.py --tag <label> --apply` (add `--include-models` if you need `.pth` inside the snapshot).
+5. **Write the paper from the archived copy** + cite the snapshot README / manifest.
+6. **Do not hand-edit archived outputs** — if something is wrong, regenerate from code and create a **new** archive folder with a new tag.
 
-These are **not** tied to a single `results/<run>/` folder; they are a **curated bundle** for the main authentication / training storyline. If you archive them, record **which** `auth_matrix.json`, checkpoints, and git commit you used.
+---
 
-**Subfolders you may also have:**
+## 4. What not to commit
 
-| Subpath | Typical source |
-|---------|----------------|
-| `figures/new_datasets_analysis/` | `scripts/analyze_new_datasets.py` (extension datasets) |
-| `figures/softcopyright/` | `scripts/capture_manual_screenshots.py` (UI grabs for legal docs) |
-| `figures/patent/` | Ad hoc / manual (if you use it) |
+| Item | Reason |
+|------|--------|
+| **`experiment_archive/`** | Large, personal snapshots; listed in `.gitignore`. |
+| **Raw videos** | `videocapture/`, `video_capture/`, and `*.mp4` / `*.avi` / `*.mov` patterns (see `.gitignore`). |
+| **Caches** | `.cache/`, `.analysis_cache/`, `analysis_cache/`, `__pycache__/`, per-run `cache/` under `results/` when huge. |
+| **Model weights** | `*.pth`, `*.pt`, `*.ckpt` unless you intentionally ship small fixtures (default: ignore). |
+| **Full root `figures/` PNG trees** | Ignored via `figures/.gitignore`; only **`figures/README.md`** and **`figures/.gitignore`** stay in Git. |
 
-## 3. Journal-style re-export (`figures_publication/`)
+---
 
-**Generator:** `scripts/make_publication_figures.py`  
-**Writes to:** `figures_publication/` (by design **does not** overwrite root `figures/`)
+## 5. Automation in this repo
 
-Use this as a **second layer** (fonts, layout) for submission. Archive it together with the same `results/` snapshot you used for inputs.
+| Script | Purpose |
+|--------|---------|
+| **`scripts/inventory_repository.py`** | Read-only scan → `docs/repository_inventory.md` + `.csv` + `docs/generated_figures_manifest.csv`. |
+| **`scripts/archive_experiment_snapshot.py`** | **Copy-only** snapshot under `experiment_archive/`; **dry-run by default**, `--apply` to copy. |
 
-## 4. Large data trees next to the repo (not under `results/`)
+---
 
-Examples (often gitignored): `LengthOptimize/`, `disturbance_sensitivity/`, `fiber_loss/`, `long_term_stability/`, `power_common_mode/`, `figures_publication/`.
-
-These are usually **raw or intermediate campaign data**. Prefer recording:
-
-- absolute or relative path root,
-- date,
-- git commit,
-- which script produced which plot (see script headers).
-
-## 5. Suggested local archive layout (one glance = one study)
-
-Keep this **outside** git or in a dated folder you control, for example:
-
-```text
-experiment_archive/
-  2026-05-11_main_paper_bundle/
-    GIT_COMMIT.txt              # output of: git rev-parse HEAD
-    README.txt                    # one paragraph: what this freeze is for
-    results/                      # copy of relevant runs, e.g. fiber_auth, length_optimization runs
-    figures/                      # optional copy after make_paper_figures.py
-    figures_publication/          # optional copy after make_publication_figures.py
-    config_snapshots/             # copy of config/*.yaml used
-```
-
-Inside `README.txt`, list **each** `results/<run>/` you copied and one line: “figures in this run → see that folder’s report.md”.
-
-## Short answer
+## Short answers
 
 | Question | Answer |
 |----------|--------|
-| Which folder is “the official experiment output” for `analysis/`? | **`results/<run_name>/`** (with `figures/` + `tables/` inside it). |
-| Which folder is “the official paper figure pack” from training/PUF eval? | **Root `figures/`** after **`make_paper_figures.py`** (flat `fig_*` files). |
-| Which is the “nicer journal” pack? | **`figures_publication/`** after **`make_publication_figures.py`**. |
-| How do I map image → experiment? | Start from **`results/<run>/report.md`** or **`manifest.json`**; for flat `fig_*`, cross-check **`make_paper_figures.py`** section names and input paths. |
+| Single-run truth? | **`results/<run_name>/`** |
+| “Official” bundled paper plots from training/PUF? | **`figures/`** after **`make_paper_figures.py`** |
+| Journal-style figures? | **`figures_publication/`** |
+| Softcopyright UI shots? **`figures/softcopyright/`** |
+| Local dated bundle for sharing? | **`experiment_archive/<timestamp>_<tag>/`** after **`archive_experiment_snapshot.py --apply`** |

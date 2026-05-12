@@ -562,8 +562,15 @@ There is **no** password login. The main window **is** the application entry poi
 |------|-----------|
 | `docs/gui_tutorial.md` | Long GUI walkthrough (cross-check model paths with §13 here). |
 | `docs/experiments.md` | Full `analysis/` reference. |
-| `docs/output_organization.md` | How `figures/` and `results/` relate; archival hints. |
+| `docs/output_organization.md` | **Primary map** of `results/` vs `figures/` vs archives; paper workflow. |
+| `docs/repository_inventory.md` | Regenerate with `python scripts/inventory_repository.py` — disk scan of top-level trees. |
+| `figures/README.md` | Explains root `figures/` vs single-run `results/<run>/`. |
 | `docs/legacy/usage.md` | Older CLI notes. |
+
+**Repository maintenance (read-only / copy-only):**
+
+- `scripts/inventory_repository.py` — writes `docs/repository_inventory.{md,csv}` and `docs/generated_figures_manifest.csv`.
+- `scripts/archive_experiment_snapshot.py` — **dry-run by default**; use `--apply` to copy a dated tree under `experiment_archive/` (see `docs/output_organization.md`).
 
 ---
 

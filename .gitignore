@@ -22,6 +22,7 @@ env/
 # ---------------------------------------------------------------------------
 *.pth
 *.pt
+*.ckpt
 *.joblib
 *.pkl
 
@@ -31,7 +32,7 @@ env/
 output/
 results/
 checkpoints/
-figures/
+# figures/ uses figures/.gitignore — only README.md + figures/.gitignore are tracked
 # Stray top-level evaluation artefacts (older scripts used to drop these here)
 /confusion_matrix.png
 /training_log.csv
@@ -42,9 +43,12 @@ figures/
 # Caches
 # ---------------------------------------------------------------------------
 .cache/
+.analysis_cache/
+analysis_cache/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.pyc
 
 # ---------------------------------------------------------------------------
 # Raw acquisition data (too large to commit)
@@ -54,6 +58,21 @@ videocapture/
 videos/
 screenshots/
 data/
+*.mp4
+*.avi
+*.mov
+
+# ---------------------------------------------------------------------------
+# Local experiment snapshots (copy-only archives; never commit)
+# ---------------------------------------------------------------------------
+experiment_archive/
+
+# ---------------------------------------------------------------------------
+# Scratch exports
+# ---------------------------------------------------------------------------
+local_exports/
+tmp/
+temp/
 
 # ---------------------------------------------------------------------------
 # Paper drafts, Word/LibreOffice binaries, local uploads (do not commit)
