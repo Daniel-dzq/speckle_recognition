@@ -448,6 +448,8 @@ Each run creates **`results/<output.name>/`** containing `report.md`, `manifest.
 | “Paper pack” auth/training figures | `make_paper_figures.py` | `figures/` (flat `fig_*` names) |
 | Journal-style re-render | `make_publication_figures.py` | `figures_publication/` (includes `publication_fig03_length_optimization*` and duplicate `publication_fig04_length_optimization*` for manuscript “Figure 4” naming; **x-axis = Total fiber length (cm)** for the length composite) |
 | Extension dataset analytics | `analyze_new_datasets.py` | `figures/new_datasets_analysis/` |
+| Planning-document bundle (Fig 4/7/8) | `generate_competition_figures.py` | `figures_competition/` |
+| **One folder for Word/LaTeX (all PNG/SVG/PDF/CSV)** | **`collect_paper_assets.py`** | **`paper_assets/`** (see **`docs/paper_assets.md`**) |
 
 **Archiving / Which PNG belongs to which experiment?** See **`docs/output_organization.md`**.
 
@@ -566,16 +568,18 @@ There is **no** password login. The main window **is** the application entry poi
 | `docs/experiments.md` | Full `analysis/` reference. |
 | `docs/output_organization.md` | **Primary map** of `results/` vs `figures/` vs archives; paper workflow. |
 | `docs/repository_inventory.md` | Regenerate with `python scripts/inventory_repository.py` — disk scan of top-level trees. |
-| `docs/competition_figure_text_check.md` | Locked **Figure 4** caption/body (Chinese) + axis rules (**total fiber length** vs auxiliary `green_prop_mm`). |
-| `figures_competition/README.md` | Pointer for competition/manuscript art; defers to `docs/competition_figure_text_check.md`. |
+| `docs/competition_figure_text_check.md` | Planning-doc Fig 4 caption axis rules (total length, inter/intra ratio). |
+| `docs/paper_assets.md` | Unify `figures/` + `figures_publication/` + `figures_competition/` into **`paper_assets/`** by format. |
+| `docs/competition_required_figures_status.md` | Status notes for planning-document Fig 4/7/8 (`generate_competition_figures.py`). |
+| `figures_competition/README.md` | Competition / 策划书 Fig 4–8; links to `paper_assets` collector. |
 | `figures/README.md` | Explains root `figures/` vs single-run `results/<run>/`. |
-| `figures_competition/` | Manuscript/competition art notes; read `figures_competition/README.md`. |
 | `docs/legacy/usage.md` | Older CLI notes. |
 
 **Repository maintenance (read-only / copy-only):**
 
 - `scripts/inventory_repository.py` — writes `docs/repository_inventory.{md,csv}` and `docs/generated_figures_manifest.csv`.
 - `scripts/archive_experiment_snapshot.py` — **dry-run by default**; use `--apply` to copy a dated tree under `experiment_archive/` (see `docs/output_organization.md`).
+- `scripts/collect_paper_assets.py` — flattens **`paper_assets/{png,svg,pdf,csv}/`** from `figures/`, `figures_publication/`, `figures_competition/` (see `docs/paper_assets.md`).
 
 ---
 

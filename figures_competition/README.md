@@ -1,25 +1,35 @@
 # figures_competition
 
-This folder is reserved for **competition- or manuscript-specific** diagram exports (PPT/PDF/PNG) that you maintain **outside** the main `figures/` and `figures_publication/` automation outputs.
+**策划书 / 竞赛用图**（图 4、7、8）输出目录，与 `figures_publication/` 中的**论文识别性能图**（认证矩阵等）分开。
 
-## Text and axis rules (Figure 4, length study)
-
-- **Fiber9cm = total fiber length 9 cm** for that batch—not green propagation length.
-- X-axis label: **Total fiber length (cm)**; ticks **8, 9, 11, 13, 16**.
-- **`green_prop_mm`** in YAML/CSVs: auxiliary geometry only, **not** the Figure 4 x-axis definition.
-- Prefer **inter/intra distance ratio** (类间/类内距离比); never “类内/类间比”, and do not claim “green propagation 9 cm is optimal”.
-- If you previously equated Fiber9cm with a green-path length (e.g. 2 cm), replace with:
-
-  *The naming Fiber9cm refers to the total fiber length. The side-polished region is located at a fixed geometry in the setup and should not be confused with the total-length label.*
-
-Authoritative wording and the final Chinese caption/body live in **`docs/competition_figure_text_check.md`**.
-
-## Automated publication figures
-
-Regenerated journal-style panels (including a `fig03`/`fig04` duplicate basename for the length composite) are produced by:
+## 生成正式三联 / 二联图（推荐）
 
 ```bash
-python scripts/make_publication_figures.py
+python scripts/generate_competition_figures.py
 ```
 
-Default output directory: **`figures_publication/`** at the repository root.
+产物：
+
+- `fig4_length_optimization.{png,svg,pdf}` — 三联图：(a) 损耗 (b) 类内/类间距离与 **inter/intra distance ratio**（双 y 轴）(c) 熵；**数据优先** `results/length_optimization_green/tables/per_length_summary.csv`
+- `fig7_dual_channel_characterization.{png,svg,pdf}` — 双通道表征
+- `fig8_common_mode_suppression.{png,svg,pdf}` — 共模抑制（summary 柱状）
+
+数据溯源见 **`manifest.csv`** 与 **`docs/competition_required_figures_status.md`**。
+
+## 汇总到单一目录（PNG / SVG / PDF / CSV）
+
+把 `figures/`、`figures_publication/`、`figures_competition/`（及本地存在的 `results/length_optimization_green/tables/*.csv`）复制到 **`paper_assets/`**，按格式分子文件夹，便于写论文一次找齐：
+
+```bash
+python scripts/collect_paper_assets.py --clean
+```
+
+说明：**`docs/paper_assets.md`**（`paper_assets/` 默认在仓库根 `.gitignore` 中，仅在本地生成）。
+
+## 不要混用的图
+
+- **`figures_publication/publication_fig03_length_optimization`**、**`publication_fig04_length_optimization`** 为期刊脚本生成的四联 composite，**不是**当前策划书 Word 中的「图 4」插稿版本。
+
+## 图 4 文字口径（总长 / 比值）
+
+见 **`docs/competition_figure_text_check.md`**（Total fiber length、inter/intra distance ratio 等）。
