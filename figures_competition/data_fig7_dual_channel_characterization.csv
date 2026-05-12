@@ -1,0 +1,35 @@
+panel,channel,metric,fiber,value,std,verification,notes
+7a,green,intra_class_corr_consecutive_ncc,Fiber1,0.9970953414837519,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber2,0.9914771467447281,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber3,0.987998902797699,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber4,0.9852568606535593,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber5,0.9957291732231776,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber6,0.9568982968727747,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber7,0.8977258056402206,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber8,0.981692040959994,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber9,0.9623393019040426,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber10,0.8013251423835754,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber11,0.9216326922178268,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber12,0.8644359062115351,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber13,0.8423767487208048,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber14,0.855093797047933,,raw_data_verified,long_term_stability; embedding preprocess
+7a,green,intra_class_corr_consecutive_ncc,Fiber15,0.882198433081309,,raw_data_verified,long_term_stability; embedding preprocess
+7a,red,intra_class_corr_summary,,0.94,,summary_statistics_verified,no red long_term_stability folder in repo
+7b,green,correlation_decrease_pct,Fiber1,33.02078027025033,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber2,5.297659997861337,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber3,0.29805371916805656,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber4,21.695514129106275,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber5,31.617723897878513,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber6,26.579800360627736,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber7,6.607948008078102,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber8,64.69529812918657,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber9,25.101247265393233,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber10,8.915313926170064,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber11,53.04196269399621,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber12,81.16774352082541,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber13,49.628067140098594,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber14,17.097179534126372,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct,Fiber15,30.50264612346948,,raw_data_verified,(1 - NCC_disturb/NCC_LT)*100; paired FiberK
+7b,green,correlation_decrease_pct_mean,all_paired,30.35112924774909,22.365965629111045,raw_data_verified,manuscript green drop reference 25.0%
+7b,red,correlation_decrease_pct,,5.0,,summary_statistics_verified,manuscript; no red disturb captures
+7c,red_green,speckle_source,,,,proxy_image,VIDEO_DUAL=A.avi; VIDEO_G=A.avi
