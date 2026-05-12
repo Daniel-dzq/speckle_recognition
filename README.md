@@ -57,6 +57,8 @@ This repository gives you:
 | **Response** | The speckle video/image the camera sees. |
 | **Fiber1 … Fiber5** | Example fiber IDs used in the code and configs. Your folder names can differ if you adapt the layouts. |
 | **Domain** | Illumination condition (e.g. green only, green + red). Folders: `Green`, `GreenAndRed`, `RedChange`. |
+| **Fiber*N*cm** (e.g. `Fiber9cm`) | **Nominal total fiber length** *N* cm for that batch. Do **not** relabel this as “green propagation length” in manuscript Figure 4. |
+| **Inter/intra distance ratio** | Inter-class distance ÷ intra-class distance. Use this wording (not “intra/inter” or “类内/类间比”). |
 | **Temporal split** | Frames inside each video are split in **time** (train / val / test) so the same physical frames are not reused incorrectly. |
 
 ---
@@ -444,7 +446,7 @@ Each run creates **`results/<output.name>/`** containing `report.md`, `manifest.
 |--------|-------------|-------------------|
 | Per-run analysis plots | `analysis/` | `results/<run>/figures/` |
 | “Paper pack” auth/training figures | `make_paper_figures.py` | `figures/` (flat `fig_*` names) |
-| Journal-style re-render | `make_publication_figures.py` | `figures_publication/` |
+| Journal-style re-render | `make_publication_figures.py` | `figures_publication/` (includes `publication_fig03_length_optimization*` and duplicate `publication_fig04_length_optimization*` for manuscript “Figure 4” naming; **x-axis = Total fiber length (cm)** for the length composite) |
 | Extension dataset analytics | `analyze_new_datasets.py` | `figures/new_datasets_analysis/` |
 
 **Archiving / Which PNG belongs to which experiment?** See **`docs/output_organization.md`**.
@@ -564,7 +566,10 @@ There is **no** password login. The main window **is** the application entry poi
 | `docs/experiments.md` | Full `analysis/` reference. |
 | `docs/output_organization.md` | **Primary map** of `results/` vs `figures/` vs archives; paper workflow. |
 | `docs/repository_inventory.md` | Regenerate with `python scripts/inventory_repository.py` — disk scan of top-level trees. |
+| `docs/competition_figure_text_check.md` | Locked **Figure 4** caption/body (Chinese) + axis rules (**total fiber length** vs auxiliary `green_prop_mm`). |
+| `figures_competition/README.md` | Pointer for competition/manuscript art; defers to `docs/competition_figure_text_check.md`. |
 | `figures/README.md` | Explains root `figures/` vs single-run `results/<run>/`. |
+| `figures_competition/` | Manuscript/competition art notes; read `figures_competition/README.md`. |
 | `docs/legacy/usage.md` | Older CLI notes. |
 
 **Repository maintenance (read-only / copy-only):**

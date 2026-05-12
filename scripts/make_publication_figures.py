@@ -40,10 +40,10 @@ VIDEO_DIR = ROOT / "videocapture"
 RESULTS_DIR = ROOT / "results"
 FIBER_AUTH_DIR = RESULTS_DIR / "fiber_auth"
 METRICS_JSON = ROOT / "figures" / "new_datasets_analysis" / "metrics_summary.json"
-LENGTH_SUMMARY_CANDIDATES = [
-    RESULTS_DIR / "length_optimize_current" / "summary.json",
-    RESULTS_DIR / "green_partial_32" / "summary.json",
-]
+LENGTH_OPTIMIZATION_GREEN_DIR = RESULTS_DIR / "length_optimization_green"
+LENGTH_OPTIMIZATION_GREEN_CSV = LENGTH_OPTIMIZATION_GREEN_DIR / "tables" / "per_length_summary.csv"
+LENGTH_SUMMARY_FALLBACK_PARTIAL = RESULTS_DIR / "green_partial_32" / "summary.json"
+LENGTH_SUMMARY_FALLBACK_LEGACY = RESULTS_DIR / "length_optimize_current" / "summary.json"
 LENGTH_IMAGE_ROOT = ROOT / "LengthOptimize" / "Green"
 
 FIBERS = ["Fiber1", "Fiber2", "Fiber3", "Fiber4", "Fiber5"]
@@ -179,10 +179,70 @@ def load_metrics_summary() -> Dict[str, Any]:
     return {}
 
 
+def _float_csv_cell(val: Optional[str]) -> Optional[float]:
+    if val is None or str(val).strip() == "":
+        return None
+    try:
+        return float(val)
+    except ValueError:
+        return None
+
+
+def _load_per_length_rows_from_green_csv(path: Path) -> List[Dict[str, Any]]:
+    """Map official experiment CSV columns to the shape expected by ``fig03_length_optimization``."""
+    rows_out: List[Dict[str, Any]] = []
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for r in reader:
+            length_mm = _float_csv_cell(r.get("length_mm"))
+            inter = _float_csv_cell(r.get("inter_distance"))
+            ent_std = _float_csv_cell(r.get("entropy_bits_std"))
+            rows_out.append({
+                "length_tag": (r.get("length_group") or r.get("length_tag") or "").strip(),
+                "length_mm": length_mm,
+                "entropy_bits_mean": _float_csv_cell(r.get("entropy_bits_mean")),
+                "entropy_bits_std": ent_std if ent_std is not None else 0.0,
+                "intra_distance_mean": _float_csv_cell(r.get("intra_distance_mean")),
+                "inter_distance_mean": inter,
+                "inter_intra_ratio": _float_csv_cell(r.get("inter_intra_ratio")),
+                "green_loss_dB_mean": _float_csv_cell(r.get("green_loss_dB_mean")),
+                "green_prop_mm": _float_csv_cell(r.get("green_prop_mm")),
+            })
+    return rows_out
+
+
 def load_length_summary() -> Optional[Dict[str, Any]]:
-    for p in LENGTH_SUMMARY_CANDIDATES:
-        if p.is_file():
-            return _load_json(p)
+    """
+    Prefer ``results/length_optimization_green/tables/per_length_summary.csv`` (full Section 3.2 run).
+
+    Fallback order:
+      1. ``green_partial_32/summary.json``
+      2. ``length_optimize_current/summary.json`` (legacy partial — prints WARNING)
+    """
+    if LENGTH_OPTIMIZATION_GREEN_CSV.is_file():
+        rows = _load_per_length_rows_from_green_csv(LENGTH_OPTIMIZATION_GREEN_CSV)
+        return {
+            "per_length_summary": rows,
+            "_data_source": str(LENGTH_OPTIMIZATION_GREEN_CSV.resolve()),
+            "_source_kind": "length_optimization_green_csv",
+        }
+
+    if LENGTH_SUMMARY_FALLBACK_PARTIAL.is_file():
+        data = dict(_load_json(LENGTH_SUMMARY_FALLBACK_PARTIAL))
+        data["_data_source"] = str(LENGTH_SUMMARY_FALLBACK_PARTIAL.resolve())
+        data["_source_kind"] = "green_partial_32"
+        return data
+
+    if LENGTH_SUMMARY_FALLBACK_LEGACY.is_file():
+        print(
+            "WARNING: using legacy partial length_optimize_current data, not recommended for manuscript.",
+            flush=True,
+        )
+        data = dict(_load_json(LENGTH_SUMMARY_FALLBACK_LEGACY))
+        data["_data_source"] = str(LENGTH_SUMMARY_FALLBACK_LEGACY.resolve())
+        data["_source_kind"] = "length_optimize_current_legacy"
+        return data
+
     return None
 
 
@@ -361,20 +421,28 @@ def fig02_speckle_response(*, pseudocolor: bool = False) -> None:
 
 
 # =============================================================================
-# FIGURE 3 — Fiber length optimization
+# FIGURE 3 / MANUSCRIPT FIGURE 4 — Fiber length vs. total fiber length (cm)
+# Primary data: ``results/length_optimization_green/tables/per_length_summary.csv``.
+# Fallback: ``green_partial_32/summary.json``, then ``length_optimize_current/summary.json`` (WARNING).
 # =============================================================================
 
 
 def fig03_length_optimization() -> None:
     data = load_length_summary()
-    if not data or "per_length_summary" not in data:
+    if not data or not data.get("per_length_summary"):
         warnings.warn(
-            "No length summary.json — Figure 3 skipped (run run_partial_length_analysis.py).",
+            "No length summary — Figure 3/4 length composite skipped. "
+            "Run: python scripts/run_length_optimization.py --config config/length_optimization_green.yaml",
             UserWarning,
         )
         return
 
     rows = sorted(data["per_length_summary"], key=_length_sort_key)
+    src_kind = data.get("_source_kind", "")
+    data_source = data.get("_data_source", "")
+    if data_source:
+        print(f"Figure 3/4 length optimization data: {data_source}", flush=True)
+
     xs_mm = [r["length_mm"] / 10.0 for r in rows]  # mm → cm
     labels = [_parse_cm_label(r["length_tag"]) for r in rows]
     ent = [r["entropy_bits_mean"] for r in rows]
@@ -383,9 +451,28 @@ def fig03_length_optimization() -> None:
     inter = [r["inter_distance_mean"] for r in rows]
     ratio = [r["inter_intra_ratio"] for r in rows]
 
+    optimum_caption = None
+    if src_kind == "length_optimization_green_csv":
+        opt = next(
+            (r for r in rows if r.get("length_tag") == "Fiber9cm" or r.get("length_mm") == 90),
+            None,
+        )
+        if opt and opt.get("inter_intra_ratio") is not None and opt.get("entropy_bits_mean") is not None:
+            g = opt.get("green_loss_dB_mean")
+            if g is not None and g == g:  # not NaN
+                g_loss = f"{g:.2f} dB"
+            else:
+                g_loss = "—"
+            optimum_caption = (
+                f"Optimum — Fiber9cm (9 cm total): green loss {g_loss}, "
+                f"inter/intra {opt['inter_intra_ratio']:.4f}, "
+                f"entropy {opt['entropy_bits_mean']:.3f} bit"
+            )
+
     fig = plt.figure(figsize=(7.2, 6.2))
+    bottom_margin = 0.12 if optimum_caption else 0.07
     gs = fig.add_gridspec(2, 3, height_ratios=[1.0, 1.0], wspace=0.35, hspace=0.45,
-                          left=0.09, right=0.98, top=0.95, bottom=0.07)
+                          left=0.09, right=0.98, top=0.93, bottom=bottom_margin)
 
     # (a) Montage: one ROI per length (Fiber1, first JPG)
     ax_a = fig.add_subplot(gs[0, 0])
@@ -470,13 +557,10 @@ def fig03_length_optimization() -> None:
         linewidth=0,
     )
     ax_b.plot(xs_mm, ent, "o-", color=COLOR_GREEN_CH, lw=LW_LINE, markersize=6)
-    ax_b.set_xlabel("Fiber length (cm)")
+    ax_b.set_xlabel("Total fiber length (cm)")
     ax_b.set_ylabel("Pixel entropy (bits)")
     despine(ax_b)
     add_panel_label(ax_b, "(b)")
-
-    # mark 11–13 cm window
-    ax_b.axvspan(11, 13, color="#E9ECEF", zorder=0, lw=0)
 
     # (c) intra / inter bars — numeric x
     ax_c = fig.add_subplot(gs[1, 0:2])
@@ -484,9 +568,8 @@ def fig03_length_optimization() -> None:
     w = 0.35
     ax_c.bar(x_arr - w / 2, intra, width=w, label="Intra-class", color=COLOR_GENUINE, edgecolor="white", linewidth=0.5)
     ax_c.bar(x_arr + w / 2, inter, width=w, label="Inter-class", color=COLOR_IMPOSTOR, alpha=0.85, edgecolor="white", linewidth=0.5)
-    ax_c.set_xlabel("Fiber length (cm)")
+    ax_c.set_xlabel("Total fiber length (cm)")
     ax_c.set_ylabel(r"Mean $L_2$ distance (ROI)")
-    ax_c.axvspan(11, 13, color="#E9ECEF", zorder=0, lw=0)
     despine(ax_c)
     ax_c.legend(loc="upper left", fontsize=PT_LEGEND, frameon=False)
     add_panel_label(ax_c, "(c)")
@@ -494,9 +577,8 @@ def fig03_length_optimization() -> None:
     # (d) ratio — separate panel, no twin axis
     ax_d = fig.add_subplot(gs[1, 2])
     ax_d.plot(xs_mm, ratio, "s-", color=COLOR_NEUTRAL, lw=LW_LINE, markersize=6)
-    ax_d.set_xlabel("Fiber length (cm)")
+    ax_d.set_xlabel("Total fiber length (cm)")
     ax_d.set_ylabel("Inter/intra distance ratio")
-    ax_d.axvspan(11, 13, color="#E9ECEF", zorder=0, lw=0)
     despine(ax_d)
     add_panel_label(ax_d, "(d)")
 
@@ -504,9 +586,13 @@ def fig03_length_optimization() -> None:
         ax.set_xticks([8, 9, 11, 13, 16])
         ax.set_xlim(7.2, 16.8)
 
-    fig.subplots_adjust(wspace=0.4, hspace=0.38)
-    for p in save_figure_all_formats(fig, "publication_fig03_length_optimization"):
-        generated_files.append(p)
+    if optimum_caption:
+        fig.text(0.5, 0.01, optimum_caption, ha="center", fontsize=7, color="#333333")
+
+    fig.subplots_adjust(wspace=0.4, hspace=0.38, bottom=bottom_margin, top=0.93)
+    for name in ("publication_fig03_length_optimization", "publication_fig04_length_optimization"):
+        for p in save_figure_all_formats(fig, name):
+            generated_files.append(p)
     plt.close(fig)
 
 

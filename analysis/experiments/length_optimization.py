@@ -7,21 +7,25 @@ For each candidate fiber length we compute:
 * intra-class distance (mean pairwise L2 among 10 repeats of the same fiber)
 * inter-class distance (mean pairwise L2 between different fibers in the group)
   — with inter_distance_std across per-fiber inter distances
-* inter/intra ratio
+* inter/intra distance ratio (inter-class / intra-class distance)
 * pixel entropy on a 400×400 ROI (raw 8-bit Shannon entropy, 256-bin histogram)
 
-X-axis: green propagation distance (cm) = total_length − 7 cm coupling offset,
-         matching the paper's convention (Section 3.2).
+**Paper / manuscript axis convention (Figure 4):** all length-comparison plots use
+**total fiber length (cm)** on the horizontal axis — nominal values **8, 9, 11, 13, 16**
+for groups **Fiber8cm … Fiber16cm**. The optional ``green_prop_mm`` field in config is
+**auxiliary geometry only** (side-polished layout); it must **not** be read as “the optimal
+length is X cm of green propagation”. The label **Fiber9cm** means **total fiber length
+9 cm** for that sample batch.
 
-Paper figures (matching Section 3.2 Figure 2):
-    Figure (a) — transmission loss (dB) vs green propagation distance
-    Figure (b) — intra/inter distance (left axis) + ratio (right axis), error bars
-    Figure (c) — pixel entropy (bits) vs green propagation distance, error bars
-    Figure (d) — speckle montage: one representative image per length group
+Paper figures (Section 3.2 — manuscript Figure 4-style panels):
+    (a) — transmission loss (dB) vs **total fiber length (cm)**
+    (b) — intra/inter distance (left axis) + **inter/intra distance ratio** (right axis)
+    (c) — pixel entropy (bits) vs **total fiber length (cm)**, error bars
+    (d) — speckle montage per length group
 
 Recommendation criterion (Section 3.2):
-    1. Green loss ≤ threshold (configurable, default 10 dB; paper: 4.5 dB at optimal)
-    2. Highest inter/intra ratio (primary)
+    1. Green loss ≤ threshold (configurable)
+    2. Highest **inter/intra distance ratio** (primary)
     3. Entropy near saturation (secondary, context)
 """
 
@@ -278,11 +282,14 @@ class LengthOptimizationExperiment(BaseExperiment):
         for lg in length_order:
             feats = by_length.get(lg, [])
             fiber_ids = sorted({f.capture.fiber for f in feats})
-            green_prop_mm = layout.fiber_lookup.get(lg, {}).get("green_prop_mm")
+            lk = layout.fiber_lookup.get(lg, {}) or {}
+            green_prop_mm = lk.get("green_prop_mm")
+            length_mm = lk.get("length_mm")
 
             if not feats:
                 rows.append({
                     "length_group": lg,
+                    "length_mm": length_mm,
                     "green_prop_mm": green_prop_mm,
                     "n_fibers": 0,
                     "entropy_bits_mean": float("nan"),
@@ -353,6 +360,7 @@ class LengthOptimizationExperiment(BaseExperiment):
 
             rows.append({
                 "length_group":       lg,
+                "length_mm":          length_mm,
                 "green_prop_mm":      green_prop_mm,
                 "n_fibers":           len(fiber_ids),
                 "entropy_bits_mean":  _mean(entropies),
@@ -375,7 +383,7 @@ class LengthOptimizationExperiment(BaseExperiment):
         """
         Comprehensive three-criterion recommendation (Section 3.2):
           1. Green loss ≤ threshold_db  (loss gate)
-          2. Highest inter/intra ratio  (primary — separability)
+          2. Highest inter/intra distance ratio  (primary — separability)
           3. Entropy near saturation    (secondary — randomness)
         """
         def _nan(v):
@@ -392,6 +400,7 @@ class LengthOptimizationExperiment(BaseExperiment):
                 continue
             candidates.append({
                 "length_group":   r["length_group"],
+                "length_mm":      r.get("length_mm"),
                 "green_prop_mm":  r.get("green_prop_mm"),
                 "ratio":          float(ratio),
                 "entropy_bits":   r.get("entropy_bits_mean"),
@@ -434,8 +443,18 @@ class LengthOptimizationExperiment(BaseExperiment):
                 "passes_loss_gate":       bool(passes_loss),
             }
 
+        tl_cm = best.get("length_mm")
+        tl_cm = round(float(tl_cm) / 10.0, 2) if (tl_cm is not None and not _nan(tl_cm)) else None
+
+        ent_bits = best.get("entropy_bits")
+        ent_part = (
+            f"{float(ent_bits):.3f}" if (ent_bits is not None and not _nan(ent_bits)) else "n/a"
+        )
+        tl_part = f"{tl_cm} cm" if tl_cm is not None else "—"
+
         return {
             "recommended_length_group": best["length_group"],
+            "recommended_total_length_cm": tl_cm,
             "green_prop_mm":            best.get("green_prop_mm"),
             "inter_intra_ratio":        round(best["ratio"], 4),
             "entropy_bits":             round(best["entropy_bits"], 4) if best.get("entropy_bits") else None,
@@ -445,9 +464,10 @@ class LengthOptimizationExperiment(BaseExperiment):
             "reason": (
                 f"Section 3.2 three-criterion selection: "
                 f"(1) green loss ≤ {threshold_db:.1f} dB [gate]; "
-                f"(2) highest inter/intra ratio = {best['ratio']:.4f} [primary]; "
-                f"(3) pixel entropy = {best['entropy_bits']:.3f} bits [context]. "
-                f"Recommended group: {best['length_group']}."
+                f"(2) highest inter/intra distance ratio = {best['ratio']:.4f} [primary]; "
+                f"(3) pixel entropy = {ent_part} bits [context]. "
+                f"Recommended batch: {best['length_group']} "
+                f"(total fiber length {tl_part} — not green-path length)."
             ),
             "candidates": candidates,
             "criterion_scores": criterion_scores,
@@ -457,16 +477,16 @@ class LengthOptimizationExperiment(BaseExperiment):
 
     @staticmethod
     def _x_labels(length_rows: List[Dict[str, Any]]) -> tuple[np.ndarray, List[str]]:
-        """Return numeric x positions and tick labels with green propagation distance."""
+        """X is category index; tick labels show **total fiber length (cm)** (8, 9, 11, 13, 16)."""
         x = np.arange(len(length_rows))
         labels = []
         for r in length_rows:
-            lg = r["length_group"]
-            gp = r.get("green_prop_mm")
-            if gp is not None:
-                labels.append(f"{lg}\n({gp/10:.0f} cm prop)")
+            lmm = r.get("length_mm")
+            lg = r.get("length_group", "")
+            if lmm is not None and lmm == lmm and not np.isnan(float(lmm)):
+                labels.append(f"{float(lmm) / 10.0:.0f}")
             else:
-                labels.append(lg)
+                labels.append(str(lg))
         return x, labels
 
     def _make_figures(
@@ -477,7 +497,7 @@ class LengthOptimizationExperiment(BaseExperiment):
         raw_features: List[CaptureFeature],
         layout: DatasetLayout,
     ):
-        """Reproduce Figure 2 from paper Section 3.2, plus a speckle montage."""
+        """Reproduce manuscript Figure 4-style panels (Section 3.2), plus a speckle montage."""
         if not length_rows:
             return
 
@@ -497,7 +517,7 @@ class LengthOptimizationExperiment(BaseExperiment):
         ent_m   = np.array([r["entropy_bits_mean"] for r in length_rows], dtype=float)
         ent_s   = np.array([r["entropy_bits_std"]  for r in length_rows], dtype=float)
 
-        # ── (a) Transmission loss vs green propagation distance ─────────────
+        # ── (a) Transmission loss vs total fiber length (cm) ───────────────
         fig_a, ax_a = plt.subplots(figsize=(5.5, 3.8))
         if has_loss:
             ax_a.errorbar(x, green_m, yerr=green_s, marker="o", linewidth=1.6,
@@ -511,7 +531,7 @@ class LengthOptimizationExperiment(BaseExperiment):
                       fontsize=10, color="gray")
         ax_a.set_xticks(x)
         ax_a.set_xticklabels(xlabels, fontsize=8)
-        ax_a.set_xlabel("Fiber length group (green propagation distance)")
+        ax_a.set_xlabel("Total fiber length (cm)")
         ax_a.set_ylabel("Transmission loss (dB)")
         ax_a.set_title("(a) Transmission loss vs fiber length")
         ax_a.spines["top"].set_visible(False)
@@ -528,15 +548,15 @@ class LengthOptimizationExperiment(BaseExperiment):
                             capsize=4, color="#ff7f0e", label="Inter-class distance")
         ax_b.set_xticks(x)
         ax_b.set_xticklabels(xlabels, fontsize=8)
-        ax_b.set_xlabel("Fiber length group (green propagation distance)")
+        ax_b.set_xlabel("Total fiber length (cm)")
         ax_b.set_ylabel("Euclidean distance (a.u.)")
-        ax_b.set_title("(b) Intra/Inter distance & ratio vs fiber length")
+        ax_b.set_title("(b) Intra/inter-class distance & inter/intra distance ratio vs total length")
         ax_b.spines["top"].set_visible(False)
 
         ax_b2 = ax_b.twinx()
         l3, = ax_b2.plot(x, ratio_m, marker="D", linewidth=1.6,
-                          linestyle="--", color="#9467bd", label="Inter/Intra ratio")
-        ax_b2.set_ylabel("Inter / Intra ratio")
+                          linestyle="--", color="#9467bd", label="Inter/intra distance ratio")
+        ax_b2.set_ylabel("Inter/intra distance ratio")
         ax_b2.spines["top"].set_visible(False)
 
         lines = [l1, l2, l3]
@@ -546,14 +566,14 @@ class LengthOptimizationExperiment(BaseExperiment):
         save_figure(fig_b, ctx.fig_path("separability_vs_length"))
         plt.close(fig_b)
 
-        # ── (c) Pixel entropy vs green propagation distance ──────────────────
+        # ── (c) Pixel entropy vs total fiber length (cm) ─────────────────────
         fig_c, ax_c = plt.subplots(figsize=(5.5, 3.8))
         ax_c.errorbar(x, ent_m, yerr=ent_s, marker="o", linewidth=1.6,
                       capsize=4, color="#2ca02c")
         ax_c.fill_between(x, ent_m - ent_s, ent_m + ent_s, alpha=0.18, color="#2ca02c")
         ax_c.set_xticks(x)
         ax_c.set_xticklabels(xlabels, fontsize=8)
-        ax_c.set_xlabel("Fiber length group (green propagation distance)")
+        ax_c.set_xlabel("Total fiber length (cm)")
         ax_c.set_ylabel("Pixel entropy (bits, 256-bin)")
         ax_c.set_title("(c) Pixel entropy vs fiber length")
         ax_c.spines["top"].set_visible(False)
@@ -584,7 +604,7 @@ class LengthOptimizationExperiment(BaseExperiment):
                     transform=ax.transAxes, fontsize=9, color="gray")
         ax.set_xticks(x)
         ax.set_xticklabels(xlabels, fontsize=8)
-        ax.set_xlabel("Fiber length group")
+        ax.set_xlabel("Total fiber length (cm)")
         ax.set_ylabel("Transmission loss (dB)")
         ax.set_title("(a)", loc="left", fontweight="bold")
         ax.spines["top"].set_visible(False)
@@ -598,19 +618,19 @@ class LengthOptimizationExperiment(BaseExperiment):
                     capsize=4, color="#ff7f0e", label="Inter")
         ax.set_xticks(x)
         ax.set_xticklabels(xlabels, fontsize=8)
-        ax.set_xlabel("Fiber length group")
+        ax.set_xlabel("Total fiber length (cm)")
         ax.set_ylabel("Euclidean distance (a.u.)")
         ax.set_title("(b)", loc="left", fontweight="bold")
         ax.spines["top"].set_visible(False)
         ax2 = ax.twinx()
         ax2.plot(x, ratio_m, marker="D", linewidth=1.6, linestyle="--",
                  color="#9467bd", label="Ratio")
-        ax2.set_ylabel("Inter / Intra ratio")
+        ax2.set_ylabel("Inter/intra distance ratio")
         ax2.spines["top"].set_visible(False)
         handles = [plt.Line2D([0],[0],color="#1f77b4",marker="o",linewidth=1.6),
                    plt.Line2D([0],[0],color="#ff7f0e",marker="s",linewidth=1.6),
                    plt.Line2D([0],[0],color="#9467bd",marker="D",linewidth=1.6,linestyle="--")]
-        ax.legend(handles, ["Intra","Inter","Ratio"], loc="lower right",
+        ax.legend(handles, ["Intra", "Inter", "Inter/intra dist. ratio"], loc="lower right",
                   frameon=False, fontsize=8)
 
         # Panel (c)
@@ -620,15 +640,15 @@ class LengthOptimizationExperiment(BaseExperiment):
         ax.fill_between(x, ent_m - ent_s, ent_m + ent_s, alpha=0.18, color="#2ca02c")
         ax.set_xticks(x)
         ax.set_xticklabels(xlabels, fontsize=8)
-        ax.set_xlabel("Fiber length group")
+        ax.set_xlabel("Total fiber length (cm)")
         ax.set_ylabel("Pixel entropy (bits)")
         ax.set_title("(c)", loc="left", fontweight="bold")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
 
         plt.suptitle(
-            "Figure 2 — Fiber length optimisation (Section 3.2)\n"
-            "Error bars = std across 5 fibers",
+            "Fiber length optimisation — total fiber length comparison (Section 3.2)\n"
+            "Error bars = std across 5 fibers; horizontal axis = total fiber length (cm)",
             fontsize=10, y=1.02,
         )
         plt.tight_layout()
@@ -636,16 +656,16 @@ class LengthOptimizationExperiment(BaseExperiment):
         plt.close(fig)
 
         ctx.add_plot("loss_vs_length",         fig_a,
-                     caption="(a) Red/green transmission loss per length group")
+                     caption="(a) Red/green transmission loss vs total fiber length (cm)")
         ctx.add_plot("separability_vs_length",  fig_b,
-                     caption="(b) Intra/inter distance and ratio per length group")
+                     caption="(b) Intra/inter-class distance and inter/intra distance ratio per total length")
         ctx.add_plot("entropy_vs_length",       fig_c,
-                     caption="(c) Mean pixel entropy per length group")
+                     caption="(c) Mean pixel entropy vs total fiber length (cm)")
         if fig_d is not None:
             ctx.add_plot("speckle_montage", fig_d,
                          caption="(d) Representative speckle images per length group")
         ctx.add_plot("figure2_combined",        fig,
-                     caption="Figure 2 combined (a)(b)(c) — paper Section 3.2")
+                     caption="Combined (a)(b)(c) — manuscript Figure 4 style, Section 3.2")
 
     @staticmethod
     def _make_speckle_montage(
@@ -693,13 +713,13 @@ class LengthOptimizationExperiment(BaseExperiment):
                 ax.set_xticks([])
                 ax.set_yticks([])
                 if row_idx == 0:
-                    gp = next(
-                        (r.get("green_prop_mm") for r in length_rows if r["length_group"] == lg),
+                    lmm = next(
+                        (r.get("length_mm") for r in length_rows if r["length_group"] == lg),
                         None,
                     )
                     title = f"{lg}"
-                    if gp is not None:
-                        title += f"\n({gp/10:.0f} cm prop)"
+                    if lmm is not None and lmm == lmm and not np.isnan(float(lmm)):
+                        title += f"\n({float(lmm) / 10.0:.0f} cm total)"
                     ax.set_title(title, fontsize=9, fontweight="bold")
                 if col_idx == 0:
                     ax.set_ylabel(f"Frame {row_idx+1}", fontsize=8)
@@ -725,20 +745,25 @@ class LengthOptimizationExperiment(BaseExperiment):
     ):
         md = MarkdownBuilder("Experiment 3.2 — Fiber Length Optimisation")
         md.p(
-            "Comprehensive analysis of candidate fiber lengths on three axes "
-            "(paper Section 3.2): transmission loss, intra/inter-class separability, "
-            "and pixel entropy.  "
-            "X-axis: green propagation distance (total fiber length − 7 cm coupling offset).  "
+            "Comprehensive analysis of candidate **total fiber lengths** (paper Section 3.2 / "
+            "manuscript Figure 4): transmission loss, intra/inter-class separability, "
+            "and pixel entropy. "
+            "**Horizontal axis:** total fiber length in cm (8, 9, 11, 13, 16 for Fiber8cm … Fiber16cm). "
+            "Optional ``green_prop_mm`` in YAML is **auxiliary side-polish geometry only**, "
+            "not the length-comparison axis and not “the optimal green propagation length”. "
+            "**Naming:** *Fiber9cm* means the **9 cm total length** sample batch. "
+            "The side-polished coupling region sits at a fixed position in the fixture; "
+            "do not confuse that layout with the total-length label. "
             "Error bars: std across 5 fibers per length group."
         )
 
         md.h(2, "Per-length summary (aggregated across 5 fibers)")
         headers = [
-            "Length group", "Green prop (cm)", "# Fibers",
+            "Length group", "Total length (cm)", "Aux. green path (cm)", "# Fibers",
             "Entropy (bits)", "±std",
             "Intra dist", "±std",
             "Inter dist", "±std",
-            "Inter/Intra",
+            "Inter/intra dist. ratio",
             "Green loss (dB)", "±std",
             "Red loss (dB)", "±std",
         ]
@@ -758,7 +783,8 @@ class LengthOptimizationExperiment(BaseExperiment):
             [
                 [
                     r["length_group"],
-                    _fmt(r.get("green_prop_mm", float("nan")) / 10, 0) if r.get("green_prop_mm") else "—",
+                    _fmt(r.get("length_mm", float("nan")) / 10, 1) if r.get("length_mm") else "—",
+                    _fmt(r.get("green_prop_mm", float("nan")) / 10, 1) if r.get("green_prop_mm") else "—",
                     r["n_fibers"],
                     _fmt(r["entropy_bits_mean"]),   _fmt(r["entropy_bits_std"]),
                     _fmt(r["intra_distance_mean"]), _fmt(r["intra_distance_std"]),
@@ -773,7 +799,7 @@ class LengthOptimizationExperiment(BaseExperiment):
 
         md.h(2, "Per-fiber detail")
         fiber_headers = [
-            "Length group", "Fiber", "Green prop (cm)",
+            "Length group", "Fiber", "Total length (cm)", "Aux. green path (cm)",
             "Entropy (bits)", "Intra dist", "Green loss (dB)", "Red loss (dB)",
         ]
         md.table(
@@ -782,7 +808,8 @@ class LengthOptimizationExperiment(BaseExperiment):
                 [
                     r["length_group"],
                     r["fiber"],
-                    _fmt(r.get("green_prop_mm", float("nan")) / 10, 0) if r.get("green_prop_mm") else "—",
+                    _fmt(r.get("length_mm", float("nan")) / 10, 1) if r.get("length_mm") else "—",
+                    _fmt(r.get("green_prop_mm", float("nan")) / 10, 1) if r.get("green_prop_mm") else "—",
                     _fmt(r["entropy_bits"]),
                     _fmt(r["intra_distance"]),
                     _fmt(r["green_loss_dB"], 2),
@@ -794,18 +821,22 @@ class LengthOptimizationExperiment(BaseExperiment):
 
         md.h(2, "Three-criterion recommendation (Section 3.2)")
         md.p(
-            "The paper selects the length that simultaneously satisfies: "
+            "The paper selects the batch whose **total fiber length** simultaneously satisfies: "
             "(1) green-channel loss below the acceptable threshold [**loss gate**]; "
-            "(2) **highest inter/intra ratio** — best balance of uniqueness vs. stability; "
+            "(2) **highest inter/intra distance ratio** — best balance of uniqueness vs. stability; "
             "(3) pixel entropy near saturation — sufficient output randomness."
         )
         md.kv({
-            "Recommended": recommendation.get("recommended_length_group"),
-            "Green prop distance": (
-                f"{recommendation['green_prop_mm']/10:.0f} cm"
-                if recommendation.get("green_prop_mm") else "—"
+            "Recommended batch (length group)": recommendation.get("recommended_length_group"),
+            "Total fiber length (cm, nominal)": (
+                f"{recommendation['recommended_total_length_cm']:.1f}"
+                if recommendation.get("recommended_total_length_cm") is not None else "—"
             ),
-            "Inter/Intra ratio": _fmt(recommendation.get("inter_intra_ratio"), 4),
+            "Auxiliary geometry (green path, mm)": (
+                f"{recommendation['green_prop_mm']:.0f}"
+                if recommendation.get("green_prop_mm") is not None else "—"
+            ),
+            "Inter/intra distance ratio": _fmt(recommendation.get("inter_intra_ratio"), 4),
             "Pixel entropy (bits)": _fmt(recommendation.get("entropy_bits"), 3),
             "Green loss (dB)": _fmt(recommendation.get("green_loss_dB"), 2),
             "Red loss (dB)": _fmt(recommendation.get("red_loss_dB"), 2),
@@ -816,7 +847,7 @@ class LengthOptimizationExperiment(BaseExperiment):
         if recommendation.get("criterion_scores"):
             md.h(3, "Criterion-by-criterion scores")
             score_headers = [
-                "Length group", "Inter/Intra ratio", "Ratio score (norm)",
+                "Length group", "Inter/intra dist. ratio", "Ratio score (norm)",
                 "Entropy (bits)", "Entropy score (norm)",
                 "Green loss (dB)", "Passes loss gate",
             ]
@@ -854,23 +885,27 @@ class LengthOptimizationExperiment(BaseExperiment):
             "**Inter-class distance**: mean pairwise Euclidean L2 distance between "
             "captures of different fibers in the same length group (measures uniqueness). "
             "Error bars = std of per-fiber mean inter distances across 5 fibers.",
+            "**Inter/intra distance ratio**: inter-class distance divided by intra-class distance "
+            "(higher ⇒ better separability under this definition).",
             "**Distance features**: centre-cropped to 400×400 then resized to 112×112, "
             "per-image min-max normalised before L2 comparison.",
-            "**Green propagation distance** = total fiber length − 7 cm "
-            "(fixed distance from polished coupling region to red input end), "
-            "matching the paper's convention for the horizontal axis.",
+            "**Total fiber length**: nominal specimen length in centimetres (**Fiber9cm ⇒ 9 cm total**). "
+            "The naming **Fiber9cm** refers to the total fiber length; the side-polished region "
+            "is located at a fixed geometry in the setup and should not be confused with the total-length label.",
+            "**Auxiliary `green_prop_mm`**: recorded side-polish geometry for each batch only; "
+            "**not** used as the principal horizontal axis for Figure 4.",
             "**Loss data**: input power unified at 1460 µW for green channel across all "
             "length groups, enabling direct cross-group comparison. "
             "High absolute loss (~28–35 dB) is inherent to side-coupling geometry and "
-            "is consistent across groups, so the inter/intra ratio remains the primary "
+            "is consistent across groups, so the inter/intra distance ratio remains the primary "
             "length-selection criterion.",
         ])
 
         md.h(2, "Generated figures")
         md.bullet([
-            "`figures/loss_vs_length.*` — (a) Transmission loss vs fiber length",
-            "`figures/separability_vs_length.*` — (b) Intra/inter distance + ratio",
-            "`figures/entropy_vs_length.*` — (c) Pixel entropy vs fiber length",
+            "`figures/loss_vs_length.*` — (a) Transmission loss vs **total fiber length (cm)**",
+            "`figures/separability_vs_length.*` — (b) Intra/inter distance + **inter/intra distance ratio**",
+            "`figures/entropy_vs_length.*` — (c) Pixel entropy vs **total fiber length (cm)**",
             "`figures/speckle_montage.*` — (d) Representative speckle images per group",
             "`figures/figure2_combined.*` — Paper Figure 2: all three panels combined",
         ])

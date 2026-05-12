@@ -434,7 +434,7 @@ def plot_separability(length_rows: List[Dict[str, Any]], output_stem: Path):
         tags,
         {"Intra-class distance": intra, "Inter-class distance": inter},
         ylabel="Euclidean distance (ROI)",
-        xlabel="Fiber length (captures grouped by folder)",
+        xlabel="Length group (nominal total fiber length in folder name)",
         title="",
         value_labels=False,
         legend=False,
@@ -475,14 +475,14 @@ def plot_separability(length_rows: List[Dict[str, Any]], output_stem: Path):
         marker="D",
         color=PALETTE[3],
         linewidth=1.35,
-        label="Inter / intra ratio",
+        label="Inter/intra distance ratio",
         zorder=5,
         markersize=5,
         clip_on=False,
     )
     rmax = np.nanmax(ratio)
     ax2.set_ylim(0, max(np.nanmean(ratio) * 1.35, float(rmax) * 1.12, 1.0))
-    ax2.set_ylabel("Inter / intra ratio")
+    ax2.set_ylabel("Inter/intra distance ratio")
     ax2.spines["top"].set_visible(False)
 
     handles1, labels1 = ax.get_legend_handles_labels()
@@ -709,7 +709,7 @@ def main() -> int:
     md.h(2, "Per-length summary")
     md.table(
         ["Length", "Entropy (bits)", "Intra distance", "Inter distance",
-         "Inter / Intra", "# inter pairs"],
+         "Inter/intra dist. ratio", "# inter pairs"],
         [[r["length_tag"], r["entropy_bits_mean"],
           r["intra_distance_mean"], r["inter_distance_mean"],
           r["inter_intra_ratio"], r["n_inter_pairs"]]
@@ -735,7 +735,7 @@ def main() -> int:
         "Shannon pixel entropy (256-bin, raw 8-bit intensity) — paper 3.2 definition.",
         "Intra-class Euclidean distance over the 10 repeated samples of each (length, fiber) pair.",
         "Inter-class Euclidean distance over pairs of samples from different fibers within the same length group.",
-        "Inter / Intra ratio per length group.",
+        "Inter/intra distance ratio per length group (not “intra/inter”).",
         "Per-image intensity mean, std, contrast-proxy, and 256-bin histogram plot.",
         "Representative speckle montage (one image per fiber × length).",
     ])

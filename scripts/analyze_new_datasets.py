@@ -111,10 +111,10 @@ def fig_disturbance(feats: List[CaptureFeature], log: logging.Logger) -> None:
         "Pooled fiber-discriminability (same metric set as length experiment):",
         f"  Intra-class L2 distance: {intra_inter['intra']:.4f}",
         f"  Inter-class L2 distance: {intra_inter['inter']:.4f}",
-        f"  Inter / Intra ratio:      {intra_inter['ratio']:.4f}",
+        f"  Inter/intra distance ratio: {intra_inter['ratio']:.4f}",
         "",
         "Higher mean within-fiber NCC ⇒ speckles more similar across repeated",
-        "captures under disturbance; larger inter/intra ⇒ better separability.",
+        "captures under disturbance; larger inter/intra distance ratio ⇒ better separability.",
     ]
     ax2.text(0.02, 0.98, "\n".join(lines), va="top", ha="left", fontsize=8, family="monospace")
 

@@ -70,7 +70,7 @@ python scripts/run_experiment.py length_optimization \
     --config config/length_optimization.yaml
 ```
 
-Evaluates transmission loss, intra/inter class separability, and pixel entropy
+Evaluates transmission loss, separability via the **inter/intra distance ratio** (inter-class ÷ intra-class distance), and pixel entropy
 on each length group. Writes `optimal_length.json` containing the recommended
 length plus the reasoning (ratio is maximised subject to
 `recommendation.green_loss_threshold_db`).

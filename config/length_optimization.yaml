@@ -3,9 +3,9 @@
 # -----------------------------------------------------------------------------
 # Evaluates multiple candidate fiber lengths on three axes:
 #   1) transmission loss (dB) [optional, needs power CSV]
-#   2) intra- and inter-class distance ratio
+#   2) intra- and inter-class separability (inter/intra **distance** ratio)
 #   3) pixel entropy on a configurable ROI
-# Recommends the length with the highest inter/intra ratio while keeping
+# Recommends the batch with the highest inter/intra distance ratio while keeping
 # the green-channel loss below `recommendation.green_loss_threshold_db`.
 # -----------------------------------------------------------------------------
 
