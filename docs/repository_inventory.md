@@ -1,6 +1,6 @@
 # Repository inventory
 
-Generated: **2026-05-12T15:16:39** (local time)
+Generated: **2026-05-12T15:17:07** (local time)
 
 This file is **machine-regenerated**. Re-run:
 
@@ -46,7 +46,7 @@ The following top-level names are classified as **historical_campaigns**. **Keep
 |------|----------|-------|-----------|--------------|-----------|---------------|---------|-------|------------|----------------|
 | `.analysis_cache/` | cache_or_temp | 1740 | 11.505 | 2026-05-04T23:12:35 | 0 | 0 | 0 | 0 | 1 |  |
 | `.DS_Store` | cache_or_temp | 1 | 0.014 | 2026-05-11T01:39:50 | 0 | 0 | 0 | 0 | 0 | (no_ext) |
-| `.gitignore` | cache_or_temp | 1 | 0.004 | 2026-05-12T15:16:26 | 0 | 0 | 0 | 0 | 0 | (no_ext) |
+| `.gitignore` | code_core | 1 | 0.004 | 2026-05-12T15:16:26 | 0 | 0 | 0 | 0 | 0 | (no_ext) |
 | `__pycache__/` | cache_or_temp | 5 | 0.084 | 2026-04-24T20:28:39 | 0 | 0 | 0 | 0 | 0 |  |
 | `analysis/` | code_core | 34 | 0.208 | 2026-05-11T01:21:52 | 0 | 0 | 0 | 0 | 0 |  |
 | `archive/` | code_core | 13 | 24.353 | 2026-04-21T22:16:45 | 0 | 0 | 0 | 0 | 0 |  |
@@ -54,7 +54,7 @@ The following top-level names are classified as **historical_campaigns**. **Keep
 | `config/` | code_core | 7 | 0.01 | 2026-05-11T01:21:52 | 0 | 0 | 0 | 0 | 0 |  |
 | `dataset.py` | code_core | 1 | 0.008 | 2026-04-14T00:07:28 | 0 | 0 | 0 | 0 | 0 | .py |
 | `disturbance_sensitivity/` | historical_campaigns | 75 | 29.736 | 2026-04-27T20:45:55 | 0 | 0 | 0 | 0 | 0 |  |
-| `docs/` | code_core | 5 | 0.044 | 2026-05-12T15:16:35 | 0 | 0 | 0 | 0 | 0 |  |
+| `docs/` | code_core | 8 | 0.062 | 2026-05-12T15:16:39 | 0 | 0 | 0 | 0 | 0 |  |
 | `fiber_loss/` | historical_campaigns | 5 | 0.041 | 2026-04-27T15:58:51 | 0 | 0 | 0 | 0 | 0 |  |
 | `figures/` | paper_figures | 64 | 48.23 | 2026-05-12T15:16:15 | 0 | 0 | 0 | 0 | 0 |  |
 | `figures_publication/` | publication_figures | 21 | 39.018 | 2026-05-05T16:47:56 | 0 | 0 | 0 | 0 | 0 |  |
@@ -65,10 +65,10 @@ The following top-level names are classified as **historical_campaigns**. **Keep
 | `models.py` | code_core | 1 | 0.003 | 2026-04-14T00:07:16 | 0 | 0 | 0 | 0 | 0 | .py |
 | `paper.docx` | unknown | 1 | 0.475 | 2026-05-06T17:41:41 | 0 | 0 | 0 | 0 | 0 | .docx |
 | `power_common_mode/` | historical_campaigns | 600 | 144.629 | 2026-04-28T12:54:13 | 0 | 0 | 0 | 0 | 0 |  |
-| `README.md` | code_core | 1 | 0.02 | 2026-05-12T15:12:22 | 0 | 0 | 0 | 0 | 0 | .md |
+| `README.md` | code_core | 1 | 0.021 | 2026-05-12T15:16:58 | 0 | 0 | 0 | 0 | 0 | .md |
 | `requirements.txt` | code_core | 1 | 0.001 | 2026-05-11T01:21:52 | 0 | 0 | 0 | 0 | 0 | .txt |
 | `results/` | experiment_results | 1137 | 587.456 | 2026-05-11T01:21:52 | 1 | 1 | 1 | 0 | 1 |  |
-| `scripts/` | code_core | 33 | 0.394 | 2026-05-12T15:16:12 | 0 | 0 | 0 | 0 | 0 |  |
+| `scripts/` | code_core | 33 | 0.394 | 2026-05-12T15:17:05 | 0 | 0 | 0 | 0 | 0 |  |
 | `test_mac_slm_output.py` | code_core | 1 | 0.004 | 2026-05-11T01:21:52 | 0 | 0 | 0 | 0 | 0 | .py |
 | `train_eval.py` | code_core | 1 | 0.011 | 2026-04-14T00:22:32 | 0 | 0 | 0 | 0 | 0 | .py |
 | `unified_dataset.py` | code_core | 1 | 0.039 | 2026-04-15T12:52:56 | 0 | 0 | 0 | 0 | 0 | .py |

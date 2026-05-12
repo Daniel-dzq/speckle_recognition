@@ -53,6 +53,8 @@ def classify_top_level(name: str, is_dir: bool) -> str:
         return "raw_or_input_data"
     if name in ("checkpoints", "output"):
         return "experiment_results"
+    if name in (".gitignore", ".gitattributes", ".editorconfig"):
+        return "code_core"
     if name in ("analysis_cache", ".analysis_cache", ".cache", ".pytest_cache", ".mypy_cache", ".ruff_cache"):
         return "cache_or_temp"
     if name == "__pycache__" or (name.startswith(".") and name not in (".github",)):
