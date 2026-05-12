@@ -1,0 +1,63 @@
+# -----------------------------------------------------------------------------
+# Experiment 3.2 — Fiber length optimisation
+# -----------------------------------------------------------------------------
+# Dataset: freshly captured green-channel still frames
+#   Green/Fiber<L>cm/Fiber<N>/<1..10>.JPG
+#   - fixed side illumination, no programmable SLM pattern
+#   - 10 random samples per fiber
+#   - 5 fibers per length group
+#
+# Methodology follows the paper verbatim:
+#   - Intra-class distance: mean pairwise Euclidean distance over the 10
+#     samples of the same fiber.
+#   - Inter-class distance: mean pairwise Euclidean distance between samples
+#     of different fibers belonging to the same length group.
+#   - Pixel entropy: Shannon entropy on the raw 400x400 grayscale center crop
+#     of each fiber's mean response image.
+# -----------------------------------------------------------------------------
+
+seed: 0
+
+output:
+  root: results
+  name: length_optimization_green
+
+dataset:
+  root: ../LengthOptimize/Green      # resolved relative to this YAML file
+  layout: length_fiber_repeat
+  length_groups: [Fiber8cm, Fiber9cm, Fiber11cm, Fiber13cm, Fiber16cm]
+  fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
+  # optional: give each length folder a human-readable metadata record
+  fiber_lookup:
+    # total length − 7 cm fixed red-input offset = green propagation distance
+    Fiber8cm:  {length_mm:  80, green_prop_mm:  10}   # 8 cm total  → 1 cm green prop
+    Fiber9cm:  {length_mm:  90, green_prop_mm:  20}   # 9 cm total  → 2 cm green prop
+    Fiber11cm: {length_mm: 110, green_prop_mm:  40}   # 11 cm total → 4 cm green prop
+    Fiber13cm: {length_mm: 130, green_prop_mm:  60}   # 13 cm total → 6 cm green prop
+    Fiber16cm: {length_mm: 160, green_prop_mm:  90}   # 16 cm total → 9 cm green prop
+
+length_groups_order: [Fiber8cm, Fiber9cm, Fiber11cm, Fiber13cm, Fiber16cm]
+
+preprocess:
+  grayscale: true
+  center_crop_size: 400      # used for the distance feature
+  resize: 112                # resize for distance only; entropy uses raw 400x400
+  normalize: minmax
+  frame_strategy: middle     # ignored for still images — kept for completeness
+  n_frames: 1
+
+entropy:
+  roi: 400                   # raw-pixel statistic area (matches paper)
+
+recommendation:
+  # Green side-illumination losses are 28–35 dB (unified input 1460 µW,
+  # output 0.4–2.3 µW) — inherent to side-coupling geometry. Threshold
+  # set above max observed loss so all groups are eligible; the optimal
+  # length is determined by the inter/intra ratio.
+  green_loss_threshold_db: 40.0
+
+power:
+  csv_path: ../fiber_loss/power_loss.csv   # merged from fiber9/11/16cm.xlsx
+
+cache:
+  enabled: true

@@ -38,8 +38,12 @@ preprocess:
   frame_strategy: middle
   n_frames: 1
 
+# Pixel entropy definition (paper 3.2)
+# A second preprocessing pass grabs the raw 400x400 grayscale center crop
+# (no resize, no min-max normalisation) so the Shannon entropy reflects the
+# true 8-bit intensity distribution, exactly as described in the paper.
 entropy:
-  roi: 400                 # Side length of the square ROI used for entropy
+  roi: 400
 
 recommendation:
   green_loss_threshold_db: 10.0

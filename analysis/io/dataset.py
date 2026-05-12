@@ -10,6 +10,9 @@ than hard-coding any single one we provide a small DSL:
   for the length-optimisation experiment where repeats live per fiber.
 * ``session_fiber_channel`` — ``<root>/<session>/<Fiber>/<channel>/<Letter>.avi``
   for time-stability acquisitions.
+* ``flat_fiber_repeat`` — ``<root>/<Fiber>/<n>.jpg`` with numeric stems (repeats),
+  e.g. disturbance / long-term flat folders.
+* ``fiber_power_repeat`` — ``<root>/<Fiber>/<Pxx>/<n>.jpg`` for pump-power sweeps.
 * ``explicit`` — a user-supplied list of dicts in the config.
 
 Every discovered file is returned as a :class:`Capture` with full provenance.
@@ -211,16 +214,32 @@ def _resolve_length_fiber_repeat(layout: DatasetLayout) -> List[Capture]:
                             )
                         )
             else:
-                for f in _iter_dir(fdir):
-                    if not f.is_file() or not _is_media(f, layout.extensions):
-                        continue
+                files = [p for p in _iter_dir(fdir)
+                         if p.is_file() and _is_media(p, layout.extensions)]
+                # Sort so that numeric stems (1.JPG, 2.JPG, ...) keep natural order
+                def _sort_key(p: Path):
+                    try:
+                        return (0, int(p.stem))
+                    except ValueError:
+                        return (1, p.stem)
+                files.sort(key=_sort_key)
+                for idx, f in enumerate(files):
+                    stem = f.stem
+                    try:
+                        repeat_index = int(stem)
+                    except ValueError:
+                        repeat_index = idx
+                    # When stems are numeric (e.g. 1..10 random samples) there
+                    # is no challenge conditioning; keep the field stable so
+                    # every sample of the same fiber groups as "intra".
+                    challenge = "unconditioned" if stem.isdigit() else _normalize_letter(stem)
                     caps.append(
                         Capture(
                             path=f,
                             fiber=fiber,
                             channel="green",
-                            challenge=_normalize_letter(f.stem),
-                            repeat=0,
+                            challenge=challenge,
+                            repeat=repeat_index,
                             length_group=lg,
                             length_mm=length_mm,
                             media_kind="image" if _is_media(f, IMAGE_EXTS) else "video",
@@ -270,6 +289,108 @@ def _resolve_session_fiber_channel(layout: DatasetLayout) -> List[Capture]:
     return caps
 
 
+def _resolve_flat_fiber_repeat(layout: DatasetLayout) -> List[Capture]:
+    """
+    Flat layout: ``<root>/<Fiber>/*.jpg`` with numeric stems (repeats).
+
+    Used by e.g. ``disturbance_sensitivity`` and flat time-series folders where
+    there is no intermediate condition directory.
+    """
+    caps: List[Capture] = []
+    root = layout.root
+    fibers = layout.fibers
+    for fdir in _iter_dir(root):
+        if not fdir.is_dir():
+            continue
+        fiber = fdir.name
+        if fibers is not None and fiber not in fibers:
+            continue
+        files = [p for p in _iter_dir(fdir) if p.is_file() and _is_media(p, layout.extensions)]
+
+        def _sort_key(p: Path) -> tuple[int, int | str]:
+            try:
+                return (0, int(p.stem))
+            except ValueError:
+                return (1, p.stem)
+
+        files.sort(key=_sort_key)
+        for f in files:
+            stem = f.stem
+            try:
+                ridx = int(stem)
+            except ValueError:
+                ridx = 0
+            challenge = "unconditioned" if stem.isdigit() else _normalize_letter(stem)
+            caps.append(
+                Capture(
+                    path=f,
+                    fiber=fiber,
+                    channel="green",
+                    challenge=challenge,
+                    repeat=ridx,
+                    media_kind="image" if _is_media(f, IMAGE_EXTS) else "video",
+                )
+            )
+    return caps
+
+
+def _resolve_fiber_power_repeat(layout: DatasetLayout) -> List[Capture]:
+    """
+    Power-sweep layout: ``<root>/<Fiber>/<Pxx>/*.jpg`` (MindVision repeats).
+
+    The power folder name (e.g. ``P70``) is stored in ``length_group`` so
+    experiments can aggregate on the discrete power setting; optional numeric
+    metadata may live in ``fiber_lookup[P70].power_mw`` etc.
+    """
+    caps: List[Capture] = []
+    root = layout.root
+    fibers = layout.fibers
+    length_groups = layout.length_groups
+    for fiber_dir in _iter_dir(root):
+        if not fiber_dir.is_dir():
+            continue
+        fiber = fiber_dir.name
+        if fibers is not None and fiber not in fibers:
+            continue
+        for grp_dir in _iter_dir(fiber_dir):
+            if not grp_dir.is_dir():
+                continue
+            grp = grp_dir.name
+            if length_groups is not None and grp not in length_groups:
+                continue
+            lg_meta = layout.fiber_lookup.get(grp, {})
+            length_mm_val = lg_meta.get("power_mw", lg_meta.get("length_mm"))
+            files = [p for p in _iter_dir(grp_dir) if p.is_file() and _is_media(p, layout.extensions)]
+
+            def _sort_key(p: Path) -> tuple[int, int | str]:
+                try:
+                    return (0, int(p.stem))
+                except ValueError:
+                    return (1, p.stem)
+
+            files.sort(key=_sort_key)
+            for f in files:
+                stem = f.stem
+                try:
+                    ridx = int(stem)
+                except ValueError:
+                    ridx = 0
+                challenge = "unconditioned" if stem.isdigit() else _normalize_letter(stem)
+                caps.append(
+                    Capture(
+                        path=f,
+                        fiber=fiber,
+                        channel="green",
+                        challenge=challenge,
+                        repeat=ridx,
+                        length_group=grp,
+                        length_mm=length_mm_val,
+                        media_kind="image" if _is_media(f, IMAGE_EXTS) else "video",
+                    )
+                )
+    return caps
+
+
 def _resolve_explicit_files(layout: DatasetLayout) -> List[Capture]:
     caps: List[Capture] = []
     base = layout.root
@@ -302,6 +423,8 @@ _RESOLVERS: Dict[str, Callable[[DatasetLayout], List[Capture]]] = {
     "domain_fiber_letter": _resolve_domain_fiber_letter,
     "length_fiber_repeat": _resolve_length_fiber_repeat,
     "session_fiber_channel": _resolve_session_fiber_channel,
+    "flat_fiber_repeat": _resolve_flat_fiber_repeat,
+    "fiber_power_repeat": _resolve_fiber_power_repeat,
     "explicit": _resolve_explicit_files,
 }
 

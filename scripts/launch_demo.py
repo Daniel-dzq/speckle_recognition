@@ -4,6 +4,7 @@ Launch the Speckle-PUF live demo GUI.
 
 Usage:
     python scripts/launch_demo.py
+    python scripts/launch_demo.py --manual-screenshot-mode   # optional; sets SPECKLE_MANUAL_SCREENSHOT_MODE (截图辅助)
 
 Supports:
     - macOS  (Apple Silicon M1-M4) : MindVision CCD via libmvsdk.dylib
@@ -31,6 +32,18 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 GUI_DIR = os.path.join(ROOT, "gui")
+
+
+def _consume_manual_screenshot_cli_flags() -> None:
+    """Strip --manual-screenshot-mode so MainWindow never sees unknown argv.
+
+    Enables assistant tools; does not change inference. See SPECKLE_FORCE_AUTH_STATE
+    in gui/robot_panel.py for optional display override (manual screenshot only).
+    """
+    if "--manual-screenshot-mode" in sys.argv:
+        sys.argv = [a for a in sys.argv if a != "--manual-screenshot-mode"]
+        os.environ.setdefault("SPECKLE_MANUAL_SCREENSHOT_MODE", "1")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Windows: inject DLL search paths BEFORE importing anything that loads ctypes.
@@ -131,6 +144,7 @@ from gui.main_window import MainWindow
 
 
 def main():
+    _consume_manual_screenshot_cli_flags()
     _print_startup_banner()
 
     app = QApplication(sys.argv)

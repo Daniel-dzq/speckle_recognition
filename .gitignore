@@ -56,11 +56,36 @@ screenshots/
 data/
 
 # ---------------------------------------------------------------------------
+# Paper drafts, Word/LibreOffice binaries, local uploads (do not commit)
+# ---------------------------------------------------------------------------
+*.docx
+*.doc
+*.pptx
+uploads/
+
+# ---------------------------------------------------------------------------
 # Paper drafts & binary archives (live under archive/)
 # ---------------------------------------------------------------------------
 archive/*.docx
 archive/*.pptx
 archive/*.zip
+
+# ---------------------------------------------------------------------------
+# Local experiment trees, caches, and one-off publication exports
+# ---------------------------------------------------------------------------
+.analysis_cache/
+LengthOptimize/
+disturbance_sensitivity/
+fiber_loss/
+figures_publication/
+long_term_stability/
+power_common_mode/
+
+# Locale-specific or legal-document tooling (keep local only; not part of OSS tree)
+scripts/generate_soft_ware_manual_revision.py
+scripts/generate_softcopyright_figures_pptx.py
+scripts/install_user_manual_screenshots.py
+scripts/regenerate_figures_and_report.py
 
 # ---------------------------------------------------------------------------
 # Jupyter

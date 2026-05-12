@@ -13,6 +13,8 @@ import os
 import sys
 import glob
 import time
+import platform
+from typing import Optional
 import numpy as np
 import cv2
 
@@ -23,7 +25,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QFrame, QStatusBar, QCheckBox, QSplitter, QScrollArea,
     QApplication, QMessageBox,
 )
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, QPoint, QTimer
 from PySide6.QtGui import QImage, QPixmap, QFont, QGuiApplication
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -33,6 +35,9 @@ from gui.slm_window         import SLMWindow
 from gui.camera_worker      import CameraWorker
 from gui.mv_camera_worker   import MvCameraWorker
 from gui.inference_worker   import InferenceWorker
+from gui.robot_panel        import RobotPanel
+from gui.cute_style         import PREMIUM_STYLE
+from gui.effects            import make_glow, apply_premium_shadow
 import gui.mvsdk as mvsdk
 
 
@@ -177,6 +182,12 @@ FIBER_MODELS_DIR = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
 LOW_CONFIDENCE_THRESHOLD = 0.40
 
 
+def _env_manual_screenshot_mode() -> bool:
+    """True when running automated/manual documentation capture (not normal lab use)."""
+    v = os.environ.get("SPECKLE_MANUAL_SCREENSHOT_MODE", "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def discover_fiber_models(model_dir: str = FIBER_MODELS_DIR):
     """Return {fiber_name: checkpoint_path} for all Fiber*.pth files."""
     result = {}
@@ -225,7 +236,7 @@ class CameraLabel(QLabel):
         self.setMinimumSize(320, 240)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.setStyleSheet(
-            "background-color: #0d0d1a; border: 1px solid #2a2a3c; border-radius: 6px;"
+            "background-color: #1C1C1E; border: none; border-radius: 14px;"
         )
         self.setText("No camera feed")
         self._pixmap = None
@@ -270,6 +281,9 @@ class MainWindow(QMainWindow):
         self._last_frame = None
         self._fps = 0.0
         self._preferred_slm_screen = 1
+        self._manual_feed_timer: Optional[QTimer] = None
+        self._manual_feed_active = False
+        self._manual_feed_phase = 0
 
         self._main_splitter = None
         self._top_splitter = None
@@ -277,6 +291,15 @@ class MainWindow(QMainWindow):
         self._pred_box = None
         self._log_box = None
         self._cam_ctrl_widgets: list = []
+
+        # Dummy labels — kept so _apply_responsive_metrics and old signal
+        # handlers never crash on attribute access after the prediction panel
+        # is replaced by RobotPanel.
+        self._lbl_pred_letter  = QLabel()
+        self._lbl_pred_smooth  = QLabel()
+        self._lbl_conf         = QLabel()
+        self._lbl_topk         = QLabel()
+        self._lbl_auth_warning = QLabel()
 
         self._setup_ui()
         self._apply_style()
@@ -305,6 +328,7 @@ class MainWindow(QMainWindow):
         self._left_scroll.setWidget(left_widget)
         self._left_scroll.setMinimumWidth(320)
         self._left_scroll.setMaximumWidth(460)
+        apply_premium_shadow(self._left_scroll)
         self._main_splitter.addWidget(self._left_scroll)
 
         right_widget = QWidget()
@@ -316,18 +340,19 @@ class MainWindow(QMainWindow):
         self._main_splitter.setSizes([360, 1080])
 
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(8, 8, 8, 4)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(24, 24, 24, 24)
+        main_layout.setSpacing(20)
         main_layout.addWidget(self._main_splitter, stretch=1)
 
         self._log_box = QGroupBox("Log")
         log_layout = QVBoxLayout(self._log_box)
-        log_layout.setContentsMargins(6, 6, 6, 6)
+        log_layout.setContentsMargins(12, 12, 12, 12)
         self._log_text = QTextEdit()
         self._log_text.setReadOnly(True)
         self._log_text.setMinimumHeight(84)
         self._log_text.setMaximumHeight(150)
         log_layout.addWidget(self._log_text)
+        apply_premium_shadow(self._log_text)
         main_layout.addWidget(self._log_box)
 
         self._status_bar = QStatusBar()
@@ -351,12 +376,12 @@ class MainWindow(QMainWindow):
     def _build_left_panel(self):
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setSpacing(8)
-        layout.setContentsMargins(4, 4, 10, 4)
+        layout.setSpacing(20)
+        layout.setContentsMargins(16, 16, 16, 16)
 
         fiber_box = QGroupBox("Fiber Authentication")
         fl = QGridLayout(fiber_box)
-        fl.setSpacing(6)
+        fl.setSpacing(10)
 
         fl.addWidget(QLabel("Authorized fiber:"), 0, 0)
         self._combo_fiber = QComboBox()
@@ -391,10 +416,10 @@ class MainWindow(QMainWindow):
 
         slm_box = QGroupBox("SLM Output Window")
         sl = QGridLayout(slm_box)
-        sl.setSpacing(6)
+        sl.setSpacing(10)
 
         self._btn_show_slm = QPushButton("Open SLM Window")
-        self._btn_show_slm.setObjectName("accent")
+        self._btn_show_slm.setObjectName("primary")
         self._btn_show_slm.clicked.connect(self._toggle_slm_window)
         sl.addWidget(self._btn_show_slm, 0, 0, 1, 3)
 
@@ -414,32 +439,49 @@ class MainWindow(QMainWindow):
         self._btn_move_slm.clicked.connect(self._move_slm_to_selected_screen)
         sl.addWidget(self._btn_move_slm, 3, 0, 1, 3)
 
-        sl.addWidget(QLabel("Letter:"), 4, 0)
+        self._btn_test_slm = QPushButton("Test SLM Output")
+        self._btn_test_slm.setToolTip(
+            "Draw a built-in SLM TEST pattern with Qt (no letter_images). "
+            "Use to verify the external display path on macOS."
+        )
+        self._btn_test_slm.clicked.connect(self._test_slm_output)
+        sl.addWidget(self._btn_test_slm, 4, 0, 1, 3)
+
+        sl.addWidget(QLabel("Letter:"), 5, 0)
         self._input_letter = QLineEdit("A")
         self._input_letter.setMaxLength(1)
         self._input_letter.setFixedWidth(56)
         self._input_letter.textChanged.connect(self._on_letter_input_changed)
-        sl.addWidget(self._input_letter, 4, 1)
+        sl.addWidget(self._input_letter, 5, 1)
 
         self._btn_send_slm = QPushButton("Send to SLM")
         self._btn_send_slm.clicked.connect(self._send_to_slm)
-        sl.addWidget(self._btn_send_slm, 4, 2)
+        sl.addWidget(self._btn_send_slm, 5, 2)
 
-        sl.addWidget(QLabel("Font size:"), 5, 0)
+        sl.addWidget(QLabel("Font size:"), 6, 0)
         self._spin_font = QSpinBox()
         self._spin_font.setRange(50, 800)
         self._spin_font.setValue(400)
         self._spin_font.setSingleStep(20)
         self._spin_font.valueChanged.connect(self._on_font_size_changed)
-        sl.addWidget(self._spin_font, 5, 1, 1, 2)
+        sl.addWidget(self._spin_font, 6, 1, 1, 2)
 
-        sl.addWidget(QLabel("A-Z cycle:"), 6, 0)
+        sl.addWidget(QLabel("A-Z cycle:"), 7, 0)
         self._btn_prev = QPushButton("◀ Prev")
         self._btn_next = QPushButton("Next ▶")
         self._btn_prev.clicked.connect(self._prev_letter)
         self._btn_next.clicked.connect(self._next_letter)
-        sl.addWidget(self._btn_prev, 6, 1)
-        sl.addWidget(self._btn_next, 6, 2)
+        sl.addWidget(self._btn_prev, 7, 1)
+        sl.addWidget(self._btn_next, 7, 2)
+
+        self._chk_slm_stretch = QCheckBox("Stretch to fill (no letterbox)")
+        self._chk_slm_stretch.setChecked(True)
+        self._chk_slm_stretch.setToolTip(
+            "Checked: image fills the entire SLM area (recommended).\n"
+            "Unchecked: keep original aspect ratio (may add black bars)."
+        )
+        self._chk_slm_stretch.toggled.connect(self._on_slm_stretch_toggled)
+        sl.addWidget(self._chk_slm_stretch, 8, 0, 1, 3)
 
         self._btn_load_img = QPushButton("Load Image to SLM")
         self._btn_load_img.setToolTip(
@@ -447,17 +489,26 @@ class MainWindow(QMainWindow):
             "Use this to display PPT-exported slides or phase-mask patterns."
         )
         self._btn_load_img.clicked.connect(self._load_image_to_slm)
-        sl.addWidget(self._btn_load_img, 7, 0, 1, 3)
+        sl.addWidget(self._btn_load_img, 9, 0, 1, 3)
+
+        self._lbl_slm_vs_camera = QLabel(
+            "Note: the large center area is the camera preview, not the SLM output. "
+            "Letter patterns appear in a separate full-screen or windowed view on the display "
+            "selected under SLM screen (use the monitor or projector wired to the SLM)."
+        )
+        self._lbl_slm_vs_camera.setStyleSheet("color: #666; font-size: 11px;")
+        self._lbl_slm_vs_camera.setWordWrap(True)
+        sl.addWidget(self._lbl_slm_vs_camera, 10, 0, 1, 3)
 
         self._lbl_screen_hint = QLabel("Detected displays: checking...")
         self._lbl_screen_hint.setStyleSheet("color: #888; font-size: 11px;")
         self._lbl_screen_hint.setWordWrap(True)
-        sl.addWidget(self._lbl_screen_hint, 8, 0, 1, 3)
+        sl.addWidget(self._lbl_screen_hint, 11, 0, 1, 3)
         layout.addWidget(slm_box)
 
         cam_box = QGroupBox("Camera / Video Source")
         cl = QGridLayout(cam_box)
-        cl.setSpacing(6)
+        cl.setSpacing(10)
 
         cl.addWidget(QLabel("Camera index:"), 0, 0)
         self._spin_cam_idx = QSpinBox()
@@ -465,7 +516,7 @@ class MainWindow(QMainWindow):
         cl.addWidget(self._spin_cam_idx, 0, 1)
 
         self._btn_start_cam = QPushButton("Start Camera")
-        self._btn_start_cam.setObjectName("accent")
+        self._btn_start_cam.setObjectName("primary")
         self._btn_start_cam.clicked.connect(self._start_camera)
         cl.addWidget(self._btn_start_cam, 0, 2)
 
@@ -500,7 +551,7 @@ class MainWindow(QMainWindow):
 
         # ── MindVision CCD (HT-UBS300C) via vendor SDK ──────────────────────
         self._btn_start_mv = QPushButton("MindVision CCD (HT-UBS300C)")
-        self._btn_start_mv.setObjectName("accent")
+        self._btn_start_mv.setObjectName("primary")
         self._btn_start_mv.setToolTip(
             "Connect via MindVision SDK (libmvsdk.dylib).\n"
             "Use this instead of 'Start Camera' for the HT-UBS300C."
@@ -513,12 +564,13 @@ class MainWindow(QMainWindow):
         self._lbl_source.setWordWrap(True)
         cl.addWidget(self._lbl_source, 5, 0, 1, 3)
         layout.addWidget(cam_box)
+        self._group_camera_video = cam_box
 
         layout.addWidget(self._build_cam_settings_box())
 
         inf_box = QGroupBox("Inference Settings")
         il = QGridLayout(inf_box)
-        il.setSpacing(6)
+        il.setSpacing(10)
 
         il.addWidget(QLabel("Infer every N frames:"), 0, 0)
         self._spin_infer_every = QSpinBox()
@@ -548,70 +600,70 @@ class MainWindow(QMainWindow):
 
     def _build_right_panel(self):
         layout = QVBoxLayout()
-        layout.setSpacing(8)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(20)
+        layout.setContentsMargins(16, 16, 16, 16)
 
         self._top_splitter = QSplitter(Qt.Horizontal)
         self._top_splitter.setChildrenCollapsible(False)
-        self._top_splitter.setHandleWidth(3)
+        self._top_splitter.setHandleWidth(12)
 
-        cam_box = QGroupBox("Live Camera Feed")
-        cam_layout = QVBoxLayout(cam_box)
-        cam_layout.setContentsMargins(6, 6, 6, 6)
+        # ── Camera card (white outer container) ────────────────────────
+        self._cam_card = QFrame()
+        self._cam_card.setObjectName("camCard")
+        self._cam_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        cam_layout = QVBoxLayout(self._cam_card)
+        cam_layout.setContentsMargins(16, 16, 16, 16)
+        cam_layout.setSpacing(0)
+
+        # ── Camera label (inner black video frame) ────────────────────
         self._cam_label = CameraLabel()
+        self._cam_label.setObjectName("camLabel")
+        # CRITICAL: Ignored size policy forces the label to obey layout
+        # bounds even though its pixmap has a large intrinsic size.
+        self._cam_label.setMinimumSize(50, 50)
+        self._cam_label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self._cam_label.setAlignment(Qt.AlignCenter)
         cam_layout.addWidget(self._cam_label)
-        self._top_splitter.addWidget(cam_box)
 
-        self._pred_box = QGroupBox("Recognition Output")
-        pred_layout = QVBoxLayout(self._pred_box)
-        pred_layout.setSpacing(8)
-        pred_layout.setContentsMargins(8, 8, 8, 8)
+        # Overlay sits on the camera card (sibling to the video label), not inside
+        # CameraLabel: QLabel+pixmap children plus QGraphicsOpacityEffect break
+        # painting and win.grab() on macOS — banner text never appears in UI or screenshots.
+        self._overlay_banner = QLabel(self._cam_card)
+        self._overlay_banner.setObjectName("overlayBanner")
+        self._overlay_banner.setAlignment(Qt.AlignCenter)
+        self._overlay_banner.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self._overlay_banner.hide()
+        self._top_splitter.addWidget(self._cam_card)
 
-        lbl_inst = QLabel("Instant")
-        lbl_inst.setAlignment(Qt.AlignCenter)
-        lbl_inst.setStyleSheet("color: #888; font-size: 11px;")
-        pred_layout.addWidget(lbl_inst)
+        # ── Robot panel (right side) — wrap so card shadow does not replace
+        # RobotPanel's own QGraphicsDropShadowEffect (Qt allows one effect per widget).
+        self._robot_card = QFrame()
+        robot_card_layout = QVBoxLayout(self._robot_card)
+        robot_card_layout.setContentsMargins(0, 0, 0, 0)
+        robot_card_layout.setSpacing(0)
+        self._robot_panel = RobotPanel(self._robot_card)
+        robot_card_layout.addWidget(self._robot_panel, stretch=1)
+        self._pred_box = self._robot_card
+        apply_premium_shadow(self._robot_card)
+        self._top_splitter.addWidget(self._robot_card)
 
-        self._lbl_pred_letter = QLabel("?")
-        self._lbl_pred_letter.setObjectName("pred_letter")
-        self._lbl_pred_letter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        pred_layout.addWidget(self._lbl_pred_letter)
+        self._robot_panel.attach_banner_callback(self._show_overlay_banner)
 
-        self._lbl_conf = QLabel("Confidence: --")
-        self._lbl_conf.setObjectName("conf_label")
-        pred_layout.addWidget(self._lbl_conf)
+        # ── Effects on the camera card (not the inner label) ──────────
+        apply_premium_shadow(self._cam_card)
+        self._cam_glow = make_glow(self._cam_card, color="#3ddc84", radius=0)
 
-        lbl_smooth = QLabel("Smoothed (majority vote)")
-        lbl_smooth.setAlignment(Qt.AlignCenter)
-        lbl_smooth.setStyleSheet("color: #888; font-size: 11px;")
-        pred_layout.addWidget(lbl_smooth)
-
-        self._lbl_pred_smooth = QLabel("?")
-        self._lbl_pred_smooth.setObjectName("pred_smooth")
-        self._lbl_pred_smooth.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        pred_layout.addWidget(self._lbl_pred_smooth)
-
-        lbl_topk = QLabel("Top-5 candidates:")
-        lbl_topk.setStyleSheet("color: #888; font-size: 11px; margin-top: 4px;")
-        pred_layout.addWidget(lbl_topk)
-
-        self._lbl_topk = QLabel("--")
-        self._lbl_topk.setWordWrap(True)
-        self._lbl_topk.setStyleSheet("color: #a0c4ff; font-size: 12px;")
-        self._lbl_topk.setAlignment(Qt.AlignTop | Qt.AlignLeft)
-        pred_layout.addWidget(self._lbl_topk)
-
-        pred_layout.addStretch()
-        self._top_splitter.addWidget(self._pred_box)
-        self._top_splitter.setStretchFactor(0, 5)
-        self._top_splitter.setStretchFactor(1, 2)
-        self._top_splitter.setSizes([900, 320])
+        # ── Splitter sizing: camera takes ~70%, robot ~30% ────────────
+        self._top_splitter.setStretchFactor(0, 7)
+        self._top_splitter.setStretchFactor(1, 3)
+        self._top_splitter.setSizes([1100, 380])
 
         layout.addWidget(self._top_splitter, stretch=1)
         return layout
 
     def _apply_style(self):
-        self.setStyleSheet(DARK_STYLE)
+        self.setStyleSheet(PREMIUM_STYLE)
 
     def _apply_responsive_metrics(self, force: bool = False):
         w = max(1, self.width())
@@ -726,6 +778,27 @@ class MainWindow(QMainWindow):
         suffix = " [Primary]" if screen == primary else ""
         return f"{idx}: {name} | {geom.width()}x{geom.height()} @ ({geom.x()},{geom.y()}){suffix}"
 
+    def _log_all_screens(self):
+        """Enumerate Qt screens for SLM debugging."""
+        screens = QGuiApplication.screens()
+        primary = QGuiApplication.primaryScreen()
+        self._log(f"[Screen diag] platform={platform.system()} count={len(screens)}")
+        if len(screens) <= 1:
+            self._log(
+                "[Screen diag] Only one display detected by Qt. "
+                "If the SLM should appear as a second monitor, use System Settings → Displays (Extend). "
+                "A mirrored-only layout may still expose two screens; if count stays 1, replug the cable."
+            )
+        for idx, s in enumerate(screens):
+            g = s.geometry()
+            name = s.name() or f"Screen {idx}"
+            dpr = s.devicePixelRatio()
+            is_pri = s == primary
+            self._log(
+                f"[Screen {idx}] name={name}, geometry=({g.x()},{g.y()},{g.width()},{g.height()}), "
+                f"dpr={dpr}, primary={is_pri}"
+            )
+
     def _refresh_screen_list(self):
         current_data = None
         if hasattr(self, "_combo_slm_screen") and self._combo_slm_screen.count() > 0:
@@ -751,8 +824,10 @@ class MainWindow(QMainWindow):
         self._combo_slm_screen.setCurrentIndex(selected_idx)
         self._preferred_slm_screen = self._combo_slm_screen.currentData() or 0
         self._lbl_screen_hint.setText(
-            f"Detected {len(screens)} display(s). Select the SLM target here; do not rely only on Windows duplicate/extend buttons."
+            f"{len(screens)} display(s) detected. Pick the output wired to the SLM or projector "
+            "(e.g. HDMI). Mirroring alone does not replace fullscreen output on the chosen screen."
         )
+        self._log_all_screens()
 
     def _selected_screen(self):
         screens = QGuiApplication.screens()
@@ -768,7 +843,9 @@ class MainWindow(QMainWindow):
     def _ensure_slm_window(self):
         if self._slm_window is None:
             self._slm_window = SLMWindow()
+            self._slm_window.diagnostic_log.connect(self._log)
             self._slm_window.set_font_size(self._spin_font.value())
+            self._slm_window.set_stretch(self._chk_slm_stretch.isChecked())
             letter = self._input_letter.text().strip().upper() or "A"
             self._slm_window.set_letter(letter)
         return self._slm_window
@@ -822,23 +899,88 @@ class MainWindow(QMainWindow):
         self._show_slm_on_selected_screen(force_show=True)
         self._btn_show_slm.setText("Hide SLM Window")
 
+    def _test_slm_output(self):
+        """Built-in Qt diagnostic (no letter_images)."""
+        self._log("[SLM] Test SLM Output — Qt pattern + RGBW bar; look at the selected SLM screen.")
+        self._log(
+            "[SLM] Reminder: the camera preview in the main window is NOT the SLM output."
+        )
+        self._log_all_screens()
+        win = self._ensure_slm_window()
+        lit = (self._input_letter.text().strip().upper() or "A")[:1]
+        if not lit.isalpha():
+            lit = "A"
+        win.set_diagnostic_pattern(lit)
+        self._show_slm_on_selected_screen(force_show=True)
+        self._btn_show_slm.setText("Hide SLM Window")
+        win.raise_()
+        win.activateWindow()
+        win.repaint()
+        win.update()
+        win.force_visual_refresh()
+
     def _send_to_slm(self):
         letter = self._input_letter.text().strip().upper()
         if not letter:
+            self._log("[SLM] Letter is empty: type A–Z in the Letter field, then click Send to SLM.")
+            QMessageBox.information(
+                self,
+                "SLM",
+                "Enter one letter (A–Z) in the Letter field, then click Send to SLM.\n\n"
+                "The app draws on the **video output** for the SLM screen you selected; it does not "
+                "push pixels through a vendor SDK into the SLM device. Connect the physical SLM to "
+                "that display output.",
+            )
             return
+
+        win = self._ensure_slm_window()
+        idx = self._combo_slm_screen.currentData()
+        screen = self._selected_screen()
+        name = screen.name() if screen else "?"
+        if screen is not None:
+            g = screen.geometry()
+            gstr = f"({g.x()},{g.y()},{g.width()},{g.height()})"
+        else:
+            gstr = "n/a"
+        self._log(
+            f"[SLM] Send pipeline: letter={letter[0]!r}, screen_index={idx}, "
+            f"screen_name={name!r}, geometry={gstr}"
+        )
+        self._log(
+            "[SLM] Output appears on the **selected SLM display**, not in the center camera preview."
+        )
+
+        win.set_letter(letter[0])
+        diag = win.png_load_diagnostic()
+        if diag:
+            self._log(f"[SLM] {diag}")
+        p = win.last_letter_png_path()
+        if p:
+            self._log(f"[SLM] Using PNG: {p}")
 
         self._show_slm_on_selected_screen(force_show=True)
         self._btn_show_slm.setText("Hide SLM Window")
-        self._slm_window.set_letter(letter)
-        self._log(f"SLM: displaying letter '{letter}'")
+        win.raise_()
+        win.activateWindow()
+        win.repaint()
+        win.update()
+        win.force_visual_refresh()
+
+        self._log(
+            f"SLM: displaying letter '{letter[0]}' — check the external / SLM screen."
+        )
 
     def _on_letter_input_changed(self, text: str):
         if self._slm_window and self._slm_window.isVisible() and text.strip():
-            self._slm_window.set_letter(text.strip().upper())
+            self._slm_window.set_letter(text.strip().upper()[:1])
 
     def _on_font_size_changed(self, size: int):
         if self._slm_window:
             self._slm_window.set_font_size(size)
+
+    def _on_slm_stretch_toggled(self, checked: bool):
+        if self._slm_window:
+            self._slm_window.set_stretch(checked)
 
     def _prev_letter(self):
         current = self._input_letter.text().strip().upper()
@@ -1164,6 +1306,96 @@ class MainWindow(QMainWindow):
             pass
         return names
 
+    def _make_manual_speckle_frame(self) -> np.ndarray:
+        """Manual screenshot only: random speckle-like grayscale (numpy), no camera."""
+        rng = np.random.default_rng(42 + self._manual_feed_phase)
+        h, w = 520, 700
+        g = rng.standard_normal((h, w)).astype(np.float32)
+        g = cv2.GaussianBlur(g, (0, 0), 2.8)
+        g = (g - g.min()) / (float(g.max() - g.min()) + 1e-6)
+        return (g * 255).astype(np.uint8)
+
+    @Slot()
+    def _on_manual_feed_tick(self) -> None:
+        if not self._manual_feed_active:
+            return
+        self._manual_feed_phase += 1
+        self._cam_label.set_frame(self._make_manual_speckle_frame())
+
+    def _stop_manual_screenshot_feed(self) -> None:
+        if self._manual_feed_timer is not None:
+            self._manual_feed_timer.stop()
+            try:
+                self._manual_feed_timer.timeout.disconnect()
+            except Exception:
+                pass
+            self._manual_feed_timer.deleteLater()
+            self._manual_feed_timer = None
+        self._manual_feed_active = False
+
+    def _stop_camera_worker_if_any(self) -> None:
+        if self._camera_worker is None:
+            return
+        if self._camera_worker.isRunning():
+            try:
+                self._camera_worker.frame_ready.disconnect(self._on_frame)
+            except Exception:
+                pass
+            try:
+                self._camera_worker.error.disconnect(self._on_cam_error)
+            except Exception:
+                pass
+            try:
+                self._camera_worker.fps_updated.disconnect(self._on_fps_update)
+            except Exception:
+                pass
+            try:
+                self._camera_worker.props_read.disconnect(self._on_cam_props)
+            except Exception:
+                pass
+            self._camera_worker.stop()
+        self._camera_worker = None
+
+    def start_manual_screenshot_feed(self) -> None:
+        """Manual screenshot only: show moving speckle-like preview without OpenCV camera."""
+        if not _env_manual_screenshot_mode():
+            return
+        self._stop_manual_screenshot_feed()
+        self._stop_camera_worker_if_any()
+        self._capture_active = True
+        self._btn_start_cam.setEnabled(False)
+        self._btn_stop_cam.setEnabled(True)
+        self._lbl_source.setText("Manual screenshot video source")
+        self._lbl_fps.setText("FPS: 24.0")
+        self._fps = 24.0
+        self._set_cam_controls_enabled(True)
+        self._manual_feed_active = True
+        self._manual_feed_timer = QTimer(self)
+        self._manual_feed_timer.timeout.connect(self._on_manual_feed_tick)
+        self._manual_feed_timer.start(80)
+        self._on_manual_feed_tick()
+        self._log("[MANUAL SCREENSHOT] Synthetic speckle preview (no CameraWorker; for documentation).")
+
+    def apply_manual_screenshot_model_fallback_ui(self) -> None:
+        """Manual screenshot only: Loaded UI when no Fiber*.pth on disk."""
+        if not _env_manual_screenshot_mode():
+            return
+        self._lbl_model_status.setStyleSheet("color: #51cf66; font-size: 11px;")
+        self._lbl_model_status.setText("Loaded: Manual screenshot model")
+        self._lbl_model.setText("Fiber: Manual screenshot model")
+        self._lbl_model_path.setText("(no .pth in repo)")
+        self._log(
+            "[MANUAL SCREENSHOT] Placeholder model labels — add results/fiber_auth/fiber_models/Fiber*.pth "
+            "for an authentic load screenshot before formal submission."
+        )
+
+    def apply_manual_screenshot_file_source_ui(self, basename: str = "manual_demo_video.mp4") -> None:
+        """Manual screenshot only: pretend File: source without QFileDialog (no blocking)."""
+        if not _env_manual_screenshot_mode():
+            return
+        self._lbl_source.setText(f"File: {basename}")
+        self._log(f"[MANUAL SCREENSHOT] File source label for documentation (no file opened): {basename}")
+
     def _scan_cameras(self):
         """Probe camera indices 0-9 on the main thread and update the spin box.
 
@@ -1178,51 +1410,60 @@ class MainWindow(QMainWindow):
         self._btn_scan_cam.setText("Scanning…")
         QApplication.processEvents()
 
-        # ── macOS: list all devices the OS knows about ─────────────────
-        if sys.platform == "darwin":
-            dev_names = self._macos_list_av_devices()
-            if dev_names:
-                self._log("macOS AVFoundation devices detected by OS:")
-                for i, name in enumerate(dev_names):
-                    if name:
-                        self._log(f"  [{i}] {name}")
-            else:
-                self._log("macOS: could not enumerate device names "
-                          "(install ffmpeg via Homebrew for full device list).")
-
-        # Remove SKIP_AUTH temporarily so the permission dialog can appear if
-        # macOS authorization has not been granted yet (or was revoked).
+        manual = _env_manual_screenshot_mode()
         _skip_auth_backup = None
-        if sys.platform == "darwin":
-            _skip_auth_backup = os.environ.pop("OPENCV_AVFOUNDATION_SKIP_AUTH", None)
+        if manual:
+            if sys.platform == "darwin":
+                os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
+            self._log(
+                "[MANUAL SCREENSHOT] Scanning camera indices 0–1 only (fast probe; full scan uses 0–11 normally)."
+            )
+        else:
+            if sys.platform == "darwin":
+                dev_names = self._macos_list_av_devices()
+                if dev_names:
+                    self._log("macOS AVFoundation devices detected by OS:")
+                    for i, name in enumerate(dev_names):
+                        if name:
+                            self._log(f"  [{i}] {name}")
+                else:
+                    self._log(
+                        "macOS: could not enumerate device names "
+                        "(install ffmpeg via Homebrew for full device list)."
+                    )
+                _skip_auth_backup = os.environ.pop("OPENCV_AVFOUNDATION_SKIP_AUTH", None)
 
         available = []
-        for i in range(12):
+        indices = (0, 1) if manual else range(12)
+        for i in indices:
             cap = cv2.VideoCapture(i)
-            if cap.isOpened():
-                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                available.append((i, w, h))
-            cap.release()
+            try:
+                if cap.isOpened():
+                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    available.append((i, w, h))
+            finally:
+                cap.release()
 
         self._btn_scan_cam.setEnabled(True)
         self._btn_scan_cam.setText("Scan Available Cameras")
 
         if available:
-            # Pick the LAST available index: 0 = built-in, higher = external
             best_idx = available[-1][0]
             self._spin_cam_idx.setValue(best_idx)
             dev_names_local = self._macos_list_av_devices() if sys.platform == "darwin" else []
             for idx, w, h in available:
                 name = dev_names_local[idx] if idx < len(dev_names_local) else ""
-                tag  = f"  ← {name}" if name else ""
+                tag = f"  ← {name}" if name else ""
                 self._log(f"  Camera [{idx}] {w}×{h}{tag}")
-            self._log(f"Scan complete. Found {len(available)} camera(s). "
-                      f"Selected index {best_idx} (change in Camera index spinner).")
+            self._log(
+                f"Scan complete. Found {len(available)} camera(s). "
+                f"Selected index {best_idx} (change in Camera index spinner)."
+            )
             if sys.platform == "darwin":
                 os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = "1"
         else:
-            if sys.platform == "darwin" and _skip_auth_backup is not None:
+            if not manual and sys.platform == "darwin" and _skip_auth_backup is not None:
                 os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = _skip_auth_backup
 
             msg = "No cameras found (OpenCV returned 0 devices)."
@@ -1238,7 +1479,12 @@ class MainWindow(QMainWindow):
                     "\n   Some industrial cameras require their own SDK driver."
                 )
             self._log(f"[CAMERA] {msg}")
-            QMessageBox.warning(self, "No Cameras Found", msg)
+            if manual:
+                self._log(
+                    "[MANUAL SCREENSHOT] No camera opened on indices 0–1; screenshot still valid for layout."
+                )
+            else:
+                QMessageBox.warning(self, "No Cameras Found", msg)
 
     def _start_camera(self):
         self._stop_camera()
@@ -1386,31 +1632,18 @@ class MainWindow(QMainWindow):
         self._log(f"Video file loaded: {path}")
 
     def _stop_camera(self):
-        if self._camera_worker and self._camera_worker.isRunning():
-            try:
-                self._camera_worker.frame_ready.disconnect(self._on_frame)
-            except Exception:
-                pass
-            try:
-                self._camera_worker.error.disconnect(self._on_cam_error)
-            except Exception:
-                pass
-            try:
-                self._camera_worker.fps_updated.disconnect(self._on_fps_update)
-            except Exception:
-                pass
-            try:
-                self._camera_worker.props_read.disconnect(self._on_cam_props)
-            except Exception:
-                pass
-            self._camera_worker.stop()
-        self._camera_worker = None
+        self._stop_manual_screenshot_feed()
+        self._stop_camera_worker_if_any()
         self._capture_active = False
         self._btn_start_cam.setEnabled(True)
         self._btn_stop_cam.setEnabled(False)
         self._cam_label.setText("No camera feed")
         self._cam_label._pixmap = None
+        self._lbl_fps.setText("FPS: --")
         self._set_cam_controls_enabled(False)
+        self._robot_panel.on_idle()
+        self._cam_glow.setBlurRadius(0)
+        self._overlay_banner.hide()
         self._log("Camera stopped.")
 
     @Slot(object)
@@ -1419,6 +1652,9 @@ class MainWindow(QMainWindow):
         self._cam_label.set_frame(frame)
         if self._chk_infer_active.isChecked() and self._infer_worker._model is not None:
             self._infer_worker.push_frame(frame)
+            if self._cam_glow.blurRadius() == 0:
+                self._cam_glow.setBlurRadius(28)
+                self._robot_panel.on_reading(self._active_fiber)
 
     @Slot(str)
     def _on_cam_error(self, msg: str):
@@ -1432,29 +1668,83 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_prediction(self, result: dict):
-        top1 = result.get("top1", "?")
-        conf = result.get("confidence", 0.0)
-        topk = result.get("topk", [])
-        smoothed = result.get("smoothed", "?")
+        self._robot_panel.on_prediction(result)
+        from PySide6.QtCore import QTimer as _QTimer
+        _QTimer.singleShot(2200, lambda: self._cam_glow.setBlurRadius(0))
 
-        self._lbl_pred_letter.setText(top1)
-        self._lbl_pred_smooth.setText(smoothed)
-        self._lbl_conf.setText(f"Confidence: {conf * 100:.1f}%")
-        topk_str = "  ".join(f"{cls}({p * 100:.1f}%)" for cls, p in topk)
-        self._lbl_topk.setText(topk_str if topk_str else "--")
+    def _show_overlay_banner(self, text: str, color: str):
+        """Show a brief overlay banner centred over the camera feed.
 
-        if conf < LOW_CONFIDENCE_THRESHOLD:
-            self._lbl_auth_warning.setText(
-                f"Low confidence ({conf*100:.0f}%) — possible unauthorized fiber or noise"
+        The banner is parented to the camera *card* (not the pixmap QLabel): a
+        child of QLabel that paints a pixmap does not reliably composite
+        overlay text or QGraphicsOpacityEffect on macOS; ``grab()`` then omits
+        the glyph layer too.
+        """
+        self._overlay_banner.setText(text)
+        self._overlay_banner.setAlignment(Qt.AlignCenter)
+        self._overlay_banner.setGraphicsEffect(None)
+        margin = 16
+        cw = max(1, self._cam_label.width())
+        ch = max(1, self._cam_label.height())
+        max_w = max(120, cw - 2 * margin)
+        max_h = max(48, ch - 2 * margin)
+
+        pad_x, pad_y = 20, 12
+        initial_fs = min(40, max(14, cw // 18))
+        self._overlay_banner.setMinimumSize(0, 0)
+
+        chosen = False
+        for fs in range(initial_fs, 5, -2):
+            self._overlay_banner.setWordWrap(False)
+            self._overlay_banner.setMinimumWidth(0)
+            self._overlay_banner.setMaximumWidth(16777215)
+            self._overlay_banner.setStyleSheet(
+                f"QLabel#overlayBanner {{ background-color: rgba(31,41,55,220); "
+                f"color: {color}; font-weight:800; font-size:{fs}px; "
+                f"letter-spacing:0px; border-radius:16px; "
+                f"padding:{pad_y}px {pad_x}px; }}"
             )
-            self._lbl_auth_warning.setStyleSheet(
-                "color: #ff6b6b; font-weight: bold; font-size: 11px; "
-                "background-color: #3c1515; border: 1px solid #e06c75; "
-                "border-radius: 4px; padding: 4px;"
+            self._overlay_banner.adjustSize()
+            tw = self._overlay_banner.sizeHint().width()
+            th = self._overlay_banner.sizeHint().height()
+            if tw > max_w:
+                self._overlay_banner.setWordWrap(True)
+                self._overlay_banner.setFixedWidth(max_w)
+                self._overlay_banner.adjustSize()
+                tw = self._overlay_banner.sizeHint().width()
+                th = self._overlay_banner.sizeHint().height()
+            if th <= max_h:
+                chosen = True
+                break
+
+        if not chosen:
+            self._overlay_banner.setWordWrap(True)
+            self._overlay_banner.setFixedWidth(max_w)
+            self._overlay_banner.setStyleSheet(
+                f"QLabel#overlayBanner {{ background-color: rgba(31,41,55,220); "
+                f"color: {color}; font-weight:800; font-size:10px; "
+                f"letter-spacing:0px; border-radius:16px; "
+                f"padding:{pad_y}px {pad_x}px; }}"
             )
-            self._lbl_auth_warning.setVisible(True)
-        else:
-            self._lbl_auth_warning.setVisible(False)
+            self._overlay_banner.adjustSize()
+
+        if not self._overlay_banner.wordWrap():
+            tw = self._overlay_banner.sizeHint().width()
+            self._overlay_banner.setFixedWidth(tw)
+
+        self._overlay_banner.adjustSize()
+        bw = self._overlay_banner.sizeHint().width()
+        bh = min(self._overlay_banner.sizeHint().height(), max_h)
+
+        top_left = self._cam_label.mapTo(self._cam_card, QPoint(0, 0))
+        x = top_left.x() + max(0, (cw - bw) // 2)
+        y = top_left.y() + max(0, (ch - bh) // 2)
+        self._overlay_banner.setParent(self._cam_card)
+        self._overlay_banner.setGeometry(x, y, bw, bh)
+        self._overlay_banner.raise_()
+        self._overlay_banner.show()
+        from PySide6.QtCore import QTimer as _QTimer
+        _QTimer.singleShot(2400, self._overlay_banner.hide)
 
     @Slot(str)
     def _on_infer_error(self, msg: str):

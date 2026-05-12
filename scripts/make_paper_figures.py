@@ -177,7 +177,7 @@ def fig_b_per_domain_bars():
     x = np.arange(n_fibers)
     bar_w = 0.22
 
-    fig, ax = plt.subplots(figsize=(DOUBLE_COL_W * 0.75, DOUBLE_COL_W * 0.75 / GOLDEN_RATIO))
+    fig, ax = plt.subplots(figsize=(DOUBLE_COL_W * 0.75, DOUBLE_COL_W * 0.72 / GOLDEN_RATIO))
 
     for k, dom in enumerate(DOMAINS):
         vals = [per_domain[f][dom] for f in FIBERS]
@@ -195,7 +195,7 @@ def fig_b_per_domain_bars():
     ax.set_ylabel("Same-fiber accuracy (%)")
     ax.set_ylim(75, 105)
     ax.yaxis.set_major_locator(mticker.MultipleLocator(5))
-    ax.legend(loc="lower left", ncol=1, fontsize=FONT_SIZE_SMALL)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.14), ncol=3, fontsize=FONT_SIZE_SMALL)
 
     ax.axhline(y=100, color="#CCCCCC", linewidth=0.4, zorder=1)
 
@@ -336,6 +336,7 @@ def fig_d_score_distributions():
     off_diag_arr = np.array(off_diag_accs) / 100.0
 
     fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W / 2.5))
+    fig.subplots_adjust(wspace=0.28, bottom=0.18, top=0.88)
 
     # --- Panel (a): authorized confidence distribution ---
     ax = axes[0]
@@ -344,8 +345,11 @@ def fig_d_score_distributions():
             linewidth=0.3, zorder=3)
     median_c = np.median(auth_confs_arr)
     ax.axvline(median_c, color="black", linewidth=0.8, linestyle="--", zorder=4)
-    ax.text(median_c + 0.02, ax.get_ylim()[1] * 0.9,
-            f"Median = {median_c:.2f}", fontsize=FONT_SIZE_SMALL, va="top")
+    ymax_a = ax.get_ylim()[1]
+    place_right = min(0.93, median_c + 0.32)
+    ax.text(place_right, ymax_a * 0.91,
+            f"Median = {median_c:.2f}", fontsize=FONT_SIZE_SMALL, va="top", ha="right")
+    ax.set_xlim(0, 1)
     ax.set_xlabel("Prediction confidence")
     ax.set_ylabel("Count (authorized samples)")
     add_panel_label(ax, "(a)")
@@ -357,8 +361,19 @@ def fig_d_score_distributions():
     chance = 100.0 / 26
     ax2.axvline(chance, color=SLATE_GRAY, linewidth=0.8, linestyle="--", zorder=4)
     ymax_b = ax2.get_ylim()[1]
-    ax2.text(chance + 0.3, ymax_b * 0.85,
-             f"Chance = {chance:.1f}%", fontsize=FONT_SIZE_SMALL, va="top", color=SLATE_GRAY)
+    axlim = ax2.get_xlim()[1]
+    tx = chance + max(1.8, axlim * 0.035)
+    if tx > axlim - 2.0:
+        tx = max(chance + 0.65, axlim * 0.55)
+        ha = "right"
+        va = "top"
+        ypos = ymax_b * 0.94
+    else:
+        ha = "left"
+        va = "top"
+        ypos = ymax_b * 0.9
+    ax2.text(tx, ypos,
+             f"Chance = {chance:.1f}%", fontsize=FONT_SIZE_SMALL, va=va, ha=ha, color=SLATE_GRAY)
     ax2.set_xlabel("Cross-fiber accuracy (%)")
     ax2.set_ylabel("Count (unauthorized evaluations)")
     add_panel_label(ax2, "(b)")
@@ -561,7 +576,10 @@ def fig_f_ncc_hd():
         print("    SKIPPED: insufficient data for intra/inter comparison.")
         return
 
-    fig, axes = plt.subplots(1, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W / 2.5))
+    fig, axes = plt.subplots(
+        1, 2, figsize=(DOUBLE_COL_W, DOUBLE_COL_W / 2.5), layout="none"
+    )
+    fig.subplots_adjust(wspace=0.32, bottom=0.34, top=0.88, left=0.07, right=0.97)
 
     # Panel (a): NCC distributions
     ax = axes[0]
@@ -574,15 +592,16 @@ def fig_f_ncc_hd():
             edgecolor="white", linewidth=0.3, label="Intra-fiber (genuine)", density=True, zorder=4)
     ax.set_xlabel("Normalized cross-correlation (NCC)")
     ax.set_ylabel("Density")
-    ax.legend(fontsize=FONT_SIZE_SMALL, loc="upper left")
+    y_ncc = ax.get_ylim()[1]
+    ax.set_ylim(0, y_ncc * 1.12)
 
     mu_i, s_i = inter_ncc.mean(), inter_ncc.std()
     mu_g, s_g = intra_ncc.mean(), intra_ncc.std()
-    ax.text(0.97, 0.97,
+    ax.text(0.03, 0.50,
             f"Inter: {mu_i:.3f} \u00b1 {s_i:.3f}\n"
             f"Intra: {mu_g:.3f} \u00b1 {s_g:.3f}",
-            transform=ax.transAxes, fontsize=5.5, va="top", ha="right",
-            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#CCCCCC", alpha=0.9))
+            transform=ax.transAxes, fontsize=5.5, va="center", ha="left",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#CCCCCC", alpha=0.95))
     add_panel_label(ax, "(a)")
 
     # Panel (b): HD distributions
@@ -595,21 +614,41 @@ def fig_f_ncc_hd():
     ax2.hist(intra_hd, bins=bins_hd, alpha=0.7, color=DEEP_BLUE,
              edgecolor="white", linewidth=0.3, label="Intra-fiber (genuine)", density=True, zorder=4)
     ax2.axvline(0.5, color=SLATE_GRAY, linewidth=0.7, linestyle="--", zorder=2)
-    ax2.text(0.502, 0.92, "Ideal = 0.50",
-             transform=ax2.get_xaxis_transform(),
-             fontsize=5.5, color=SLATE_GRAY, va="top", rotation=90)
+    ax2.text(
+        0.72, 1.01,
+        "Ideal HD = 0.5",
+        ha="center",
+        va="bottom",
+        fontsize=5.5,
+        color=SLATE_GRAY,
+        transform=ax2.get_xaxis_transform(),
+    )
     ax2.set_xlabel("Hamming distance (HD)")
     ax2.set_ylabel("Density")
-    ax2.legend(fontsize=FONT_SIZE_SMALL, loc="upper right")
+    y_hd = ax2.get_ylim()[1]
+    ax2.set_ylim(0, y_hd * 1.12)
 
     mu_ih, s_ih = inter_hd.mean(), inter_hd.std()
     mu_gh, s_gh = intra_hd.mean(), intra_hd.std()
-    ax2.text(0.03, 0.97,
+    ax2.text(0.98, 0.04,
              f"Inter: {mu_ih:.3f} \u00b1 {s_ih:.3f}\n"
              f"Intra: {mu_gh:.3f} \u00b1 {s_gh:.3f}",
-             transform=ax2.transAxes, fontsize=5.5, va="top", ha="left",
-             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#CCCCCC", alpha=0.9))
+             transform=ax2.transAxes, fontsize=5.5, va="bottom", ha="right",
+             bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="#CCCCCC", alpha=0.95))
     add_panel_label(ax2, "(b)")
+
+    h_leg, lab_leg = ax.get_legend_handles_labels()
+    fig.legend(
+        h_leg,
+        lab_leg,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.11),
+        ncol=2,
+        fontsize=FONT_SIZE_SMALL,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#CCCCCC",
+    )
 
     stem = os.path.join(FIGURES_DIR, "fig_ncc_hd")
     saved = save_figure(fig, stem)

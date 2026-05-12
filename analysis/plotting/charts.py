@@ -73,13 +73,18 @@ def grouped_bars(
     figsize: Tuple[float, float] = (SINGLE_COL_W, SINGLE_COL_W / 1.4),
     bar_width: float = 0.8,
     value_labels: bool = False,
+    legend: bool = True,
+    layout: Optional[str] = None,
     ax=None,
 ):
     """Grouped bar plot with optional error bars and on-bar value labels."""
     n_series = max(1, len(series))
     fig = None
     if ax is None:
-        fig, ax = plt.subplots(figsize=figsize)
+        subplot_kw: Dict[str, Any] = {"figsize": figsize}
+        if layout is not None:
+            subplot_kw["layout"] = layout
+        fig, ax = plt.subplots(**subplot_kw)
     x = np.arange(len(categories), dtype=np.float64)
     w = bar_width / n_series
     for i, (name, values) in enumerate(series.items()):
@@ -106,7 +111,7 @@ def grouped_bars(
     ax.set_ylabel(ylabel)
     if title:
         ax.set_title(title)
-    if n_series > 1:
+    if n_series > 1 and legend:
         ax.legend(loc="best")
     if fig is None:
         fig = ax.figure
