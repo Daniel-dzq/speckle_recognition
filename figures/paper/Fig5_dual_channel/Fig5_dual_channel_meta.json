@@ -1,0 +1,11 @@
+{
+  "generated_utc": "2026-05-13T07:14:38.429663+00:00",
+  "script": "plot_fig5_dual_channel.py",
+  "output_dir": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig5_dual_channel",
+  "base_name": "Fig5_dual_channel",
+  "dpi_png": 600,
+  "metrics_summary": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/new_datasets_analysis/metrics_summary.json",
+  "VIDEO_GREEN": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/videocapture/Green/Fiber1/A.avi",
+  "VIDEO_DUAL": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/videocapture/GreenAndRed/Fiber1/A.avi",
+  "note": "Panel (c) uses representative middle-frame proxies from videocapture."
+}

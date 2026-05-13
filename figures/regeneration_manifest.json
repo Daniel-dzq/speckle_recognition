@@ -1,0 +1,17 @@
+{
+  "generated_utc": "2026-05-05T07:47:55.007866+00:00",
+  "python": "/opt/anaconda3/envs/recognition/bin/python",
+  "steps": [
+    "make_paper_figures",
+    "analyze_new_datasets",
+    "run_partial_length_analysis"
+  ],
+  "length_figures_copied": [
+    "fig_green_length_speckle_montage.png",
+    "fig_green_length_entropy_per_length.png",
+    "fig_green_length_intra_inter_by_length.png",
+    "fig_green_length_intensity_histogram.png"
+  ],
+  "archived_note": "As of 2026-05, these raster assets were moved to figures/archive_old/legacy_green_partial_32/. Final length figures use results/length_optimization_green/ via scripts/paper_figures/plot_fig3_length_optimization.py.",
+  "report_markdown": "figures/archive_old/图表与实验结果分析报告.md"
+}

@@ -32,7 +32,7 @@ env/
 output/
 results/
 checkpoints/
-# figures/ uses figures/.gitignore — only README.md + figures/.gitignore are tracked
+# figures/ granular rules in figures/.gitignore (paper outputs + patent renders tracked)
 # Stray top-level evaluation artefacts (older scripts used to drop these here)
 /confusion_matrix.png
 /training_log.csv

@@ -1,0 +1,10 @@
+{
+  "generated_utc": "2026-05-13T07:14:39.980089+00:00",
+  "script": "plot_fig6_common_mode.py",
+  "output_dir": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig6_common_mode_suppression",
+  "base_name": "Fig6_common_mode_suppression",
+  "dpi_png": 600,
+  "power_common_mode_root": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/power_common_mode",
+  "eta_cv_diagnostic_pct": 85.79621596844676,
+  "conflict_note": "\u03b7 bar uses manuscript 4.3%; simple mean G/R pool CV differs (see CSV)."
+}
