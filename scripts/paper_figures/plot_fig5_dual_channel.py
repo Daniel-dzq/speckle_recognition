@@ -17,6 +17,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
+from paper_figures.io_utils import archive_existing_outputs  # noqa: E402
 from paper_figures.style import (
     COL_GREEN,
     COL_RED,
@@ -135,6 +136,9 @@ def main() -> None:
 
     out_dir = figure_root(REPO_ROOT) / "Fig5_dual_channel"
     base = "Fig5_dual_channel"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    archive_existing_outputs(out_dir, base)
+
     plot_csv = pd.concat(
         [
             df_lt.assign(panel="temporal_stability"),
@@ -154,6 +158,9 @@ def main() -> None:
             "VIDEO_GREEN": str(VIDEO_GREEN.resolve()),
             "VIDEO_DUAL": str(VIDEO_DUAL.resolve()),
             "note": "Panel (c) uses representative middle-frame proxies from videocapture.",
+            "manuscript_ready": True,
+            "source_dataset_status": "final_or_PI_confirmed",
+            "data_validated_by_PI": True,
         },
     )
     plt.close(fig)

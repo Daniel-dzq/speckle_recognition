@@ -2,6 +2,7 @@
 """Sanity checks for generated paper figures (English-only SVG, artifacts present)."""
 from __future__ import annotations
 
+import csv
 import json
 import re
 import sys
@@ -11,6 +12,10 @@ ROOT = Path(__file__).resolve().parents[2]
 FIG_PAPER = ROOT / "figures" / "paper"
 
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
+
+FIG6_EXPECTED_REASON = (
+    "G/R ratio not fully recomputed from verified paired red/green raw images yet."
+)
 
 
 def svg_contains_cjk(path: Path) -> bool:
@@ -39,16 +44,66 @@ def check_bundle(fig_dir: Path, base: str) -> list[str]:
     return errs
 
 
+def policy_errors(fig_dir: Path, base: str, meta: dict) -> list[str]:
+    errs: list[str] = []
+    if base == "Fig3_length_optimization":
+        if meta.get("length_meaning") != "total_fiber_length_cm":
+            errs.append(f"{base}: meta length_meaning must be total_fiber_length_cm")
+        if meta.get("optimal_total_fiber_length_cm") != 9:
+            errs.append(f"{base}: meta optimal_total_fiber_length_cm must be 9")
+        if meta.get("confirmed_by_PI") is not True:
+            errs.append(f"{base}: meta confirmed_by_PI must be true")
+        csv_p = fig_dir / f"{base}_data.csv"
+        if csv_p.is_file():
+            with csv_p.open(encoding="utf-8", newline="") as f:
+                r = csv.DictReader(f)
+                if "length_meaning" not in (r.fieldnames or []):
+                    errs.append(f"{base}: data CSV missing length_meaning column")
+                elif "is_selected_optimal" not in (r.fieldnames or []):
+                    errs.append(f"{base}: data CSV missing is_selected_optimal column")
+                else:
+                    rows = list(r)
+                    opt = [row for row in rows if row.get("is_selected_optimal", "").lower() in ("true", "1")]
+                    if len(opt) != 1:
+                        errs.append(f"{base}: expected exactly one is_selected_optimal row, got {len(opt)}")
+                    else:
+                        tcm = opt[0].get("total_length_cm", "").strip()
+                        if tcm and float(tcm) != 9.0:
+                            errs.append(f"{base}: selected optimal row total_length_cm must be 9")
+    if base == "Fig5_dual_channel":
+        if meta.get("manuscript_ready") is not True:
+            errs.append(f"{base}: meta manuscript_ready must be true")
+        if meta.get("data_validated_by_PI") is not True:
+            errs.append(f"{base}: meta data_validated_by_PI must be true")
+        if meta.get("source_dataset_status") != "final_or_PI_confirmed":
+            errs.append(f"{base}: meta source_dataset_status must be final_or_PI_confirmed")
+    if base == "Fig6_common_mode_suppression":
+        if meta.get("manuscript_ready") is not False:
+            errs.append(f"{base}: meta manuscript_ready must be false (draft)")
+        if meta.get("reason") != FIG6_EXPECTED_REASON:
+            errs.append(f"{base}: meta reason must match draft G/R verification string")
+    return errs
+
+
 def main() -> int:
     if not FIG_PAPER.is_dir():
         print("No figures/paper yet")
         return 0
     all_errs: list[str] = []
-    for meta in sorted(FIG_PAPER.rglob("*_meta.json")):
-        data = json.loads(meta.read_text(encoding="utf-8"))
-        base = meta.name.replace("_meta.json", "")
-        fig_dir = meta.parent
+    for meta_path in sorted(FIG_PAPER.rglob("*_meta.json")):
+        try:
+            rel = meta_path.relative_to(FIG_PAPER)
+        except ValueError:
+            continue
+        if len(rel.parts) > 1 and rel.parts[1] == "archive":
+            continue
+        if "archive" in rel.parts:
+            continue
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+        base = meta_path.name.replace("_meta.json", "")
+        fig_dir = meta_path.parent
         all_errs.extend(check_bundle(fig_dir, base))
+        all_errs.extend(policy_errors(fig_dir, base, data))
     if all_errs:
         print("SANITY FAILURES:")
         for e in all_errs:

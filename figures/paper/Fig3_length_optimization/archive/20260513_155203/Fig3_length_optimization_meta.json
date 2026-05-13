@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-05-13T07:52:04.235624+00:00",
+  "generated_utc": "2026-05-13T07:14:33.407611+00:00",
   "script": "plot_fig3_length_optimization.py",
   "output_dir": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig3_length_optimization",
   "base_name": "Fig3_length_optimization",
@@ -12,9 +12,5 @@
     110,
     130,
     160
-  ],
-  "length_meaning": "total_fiber_length_cm",
-  "confirmed_by_PI": true,
-  "optimal_total_fiber_length_cm": 9,
-  "legacy_length_datasets_excluded": true
+  ]
 }

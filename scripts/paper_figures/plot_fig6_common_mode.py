@@ -19,6 +19,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
+from paper_figures.io_utils import archive_existing_outputs  # noqa: E402
 from paper_figures.style import (
     COL_GREEN,
     COL_BLUE,
@@ -92,6 +93,9 @@ def main() -> None:
 
     out_dir = figure_root(REPO_ROOT) / "Fig6_common_mode_suppression"
     base = "Fig6_common_mode_suppression"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    archive_existing_outputs(out_dir, base)
+
     df = pd.DataFrame([
         {"panel": "a", "series": "raw_green_CV_pct", "value": cv_g, "n_images": n_im, "verification": "computed"},
         {"panel": "a", "series": "eta_CV_pct_bar", "value": ETA_CV_MANUSCRIPT, "n_images": "", "verification": "manuscript_summary"},
@@ -109,6 +113,14 @@ def main() -> None:
             "power_common_mode_root": str(POWER_ROOT.resolve()),
             "eta_cv_diagnostic_pct": cv_eta_diag,
             "conflict_note": "η bar uses manuscript 4.3%; simple mean G/R pool CV differs (see CSV).",
+            "manuscript_ready": False,
+            "reason": (
+                "G/R ratio not fully recomputed from verified paired red/green raw images yet."
+            ),
+            "paired_data_search_note": (
+                "Continue searching under power_common_mode/ for time-aligned red/green pairs; "
+                "do not treat this figure as final or silently replace the plot until pairs are verified."
+            ),
         },
     )
     plt.close(fig)

@@ -18,6 +18,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
+from paper_figures.io_utils import archive_existing_outputs  # noqa: E402
 from paper_figures.style import (
     COL_BLUE,
     COL_GRAY,
@@ -68,8 +69,9 @@ def main() -> None:
     roc_auc = auc(fpr, tpr)
 
     out_dir = figure_root(REPO_ROOT) / "Fig7_authentication"
-    out_dir.mkdir(parents=True, exist_ok=True)
     base = "Fig7_authentication"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    archive_existing_outputs(out_dir, base)
 
     pd.DataFrame({"fpr": fpr, "tpr": tpr}).to_csv(out_dir / f"{base}_roc_curve.csv", index=False)
     pd.DataFrame(cm, index=[f"true_{c}" for c in le.classes_], columns=list(le.classes_)).to_csv(

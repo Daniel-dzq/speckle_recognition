@@ -15,6 +15,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parents[1]
 sys.path.insert(0, str(SCRIPT_DIR.parent))
 
+from paper_figures.io_utils import archive_existing_outputs  # noqa: E402
 from paper_figures.style import (  # noqa: E402
     COL_GREEN,
     COL_RED,
@@ -30,7 +31,9 @@ from paper_figures.style import (  # noqa: E402
 
 CSV_PATH = REPO_ROOT / "results" / "length_optimization_green" / "tables" / "per_length_summary.csv"
 OPTIMAL_PATH = REPO_ROOT / "results" / "length_optimization_green" / "optimal_length.json"
-ALLOWED_MM = {80, 90, 110, 130, 160}  # 8–16 cm campaign; flags 5/30/45 cm style mistakes
+# Measurement sweep in `length_optimization_green` (total fiber length in cm = length_mm/10).
+# PI-confirmed optimum for the manuscript: **9 cm total fiber length** (row Fiber9cm), not green-path-only length.
+ALLOWED_MM = {80, 90, 110, 130, 160}
 
 
 def main() -> None:
@@ -53,7 +56,8 @@ def main() -> None:
         bad = lengths - ALLOWED_MM
         raise ValueError(
             f"Unexpected length_mm values {bad}. Refusing to plot mixed-era lengths "
-            f"(expected subset of {sorted(ALLOWED_MM)} mm). Audit old 5/30/45 cm data separately."
+            f"(expected subset of {sorted(ALLOWED_MM)} mm). Legacy 5/30/45 cm style datasets "
+            f"are archived and must not be mixed — see docs/figure_audit_report.md."
         )
 
     df = df.sort_values("length_mm")
@@ -110,14 +114,23 @@ def main() -> None:
 
     out_dir = figure_root(REPO_ROOT) / "Fig3_length_optimization"
     base = "Fig3_length_optimization"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    archive_existing_outputs(out_dir, base)
+
     plot_df = df.copy()
     plot_df["total_length_cm"] = plot_df["length_mm"] / 10.0
+    plot_df["length_meaning"] = "total_fiber_length_cm"
+    plot_df["is_selected_optimal"] = plot_df["length_mm"] == 90
     write_table_csv(plot_df, out_dir / f"{base}_data.csv")
 
     extra = {
         "input_csv": str(CSV_PATH.resolve()),
         "input_optimal_json": str(OPTIMAL_PATH.resolve()) if OPTIMAL_PATH.is_file() else None,
         "length_mm_seen": sorted(lengths),
+        "length_meaning": "total_fiber_length_cm",
+        "confirmed_by_PI": True,
+        "optimal_total_fiber_length_cm": 9,
+        "legacy_length_datasets_excluded": True,
     }
     paths = save_figure_bundle(fig, out_dir, base, "plot_fig3_length_optimization.py", extra_meta=extra)
     plt.close(fig)

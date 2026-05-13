@@ -8,7 +8,7 @@ Generated UTC: 2026-05-13T07:14:30.367597+00:00
 - **Inventory CSV:** `docs/figure_audit_inventory.csv`
 - **Data-like files (csv/json/txt/md/npy/npz) indexed:** 232 (excluding heavy cache paths)
 - **Plot-related scripts found:** 25
-- **Regenerated journal pack:** run `python3 scripts/generate_all_paper_figures.py` → outputs under `figures/paper/Fig3_*` … `Fig7_*` with PNG/PDF/SVG + `*_data.csv` + `*_meta.json`.
+- **Regenerated journal pack:** run `python3 scripts/generate_all_paper_figures.py` → canonical outputs under `figures/paper/Fig3_*` … `Fig7_*` with PNG/PDF/SVG + `*_data.csv` + `*_meta.json`. Prior bundles are **moved** to `archive/YYYYMMDD_HHMMSS/` before overwrite (see `docs/figure_generation_policy.md`).
 
 ## Top-level directories containing images
 
@@ -24,12 +24,26 @@ Generated UTC: 2026-05-13T07:14:30.367597+00:00
 - **power_common_mode/** — 600 file(s)
 - **results/** — 47 file(s)
 
+## PI-confirmed (length optimization)
+
+**The final optimized length is 9 cm total fiber length.** This is **total fiber length**, not green-only propagation distance. Fig. 3 metadata and CSV use `length_meaning = "total_fiber_length_cm"` and `optimal_total_fiber_length_cm = 9` with `confirmed_by_PI: true`.
+
 ## Length optimization data consistency (critical)
 
 **Canonical final length experiment:** `results/length_optimization_green/tables/per_length_summary.csv`
 
-- Length groups present: **Fiber8cm, Fiber9cm, Fiber11cm, Fiber13cm, Fiber16cm** (total fiber lengths **8–16 cm** scale, not 5/30/45 cm).
-- **Do not mix** with `results/green_partial_32/` or `figures/fig_green_length_*` (regeneration_manifest lists `run_partial_length_analysis`).
+- Length groups present: **Fiber8cm, Fiber9cm, Fiber11cm, Fiber13cm, Fiber16cm** (total fiber lengths **8–16 cm** sweep cohort). The **selected optimum for the manuscript is 9 cm total** (PI-confirmed), not an ambiguous “optimize anywhere in 8–16 cm” conclusion.
+- **Legacy partial-length datasets** (e.g. **5 / 30 / 45 cm**-era exports, **30 cm**-centric narratives, **`green_partial_32` / `fig_green_length_*` / `run_partial_length_analysis`**) are **archived** and **must not** be used for the **final** length-optimization figure; references belong in the audit/archive section only.
+- **Do not mix** archived cohorts with the canonical CSV above.
+
+### Fig. 3 metadata (canonical on regenerate)
+
+| Field | Value |
+|-------|--------|
+| `length_meaning` | `total_fiber_length_cm` |
+| `optimal_total_fiber_length_cm` | `9` |
+| `confirmed_by_PI` | `true` |
+| `legacy_length_datasets_excluded` | `true` |
 
 ## Legacy / suspicious assets
 
@@ -85,7 +99,12 @@ scripts/train_unified.py
 - **Surface roughness Rq distributions:** no `data/processed/` roughness table found — needs profilometer export.
 - **Known- vs unknown-challenge ROC split:** requires explicit protocol labels in predictions export.
 
+## Fig. 5 and Fig. 6 (PI workflow)
+
+- **Fig. 5:** Dataset and figure are **PI-confirmed valid** for the manuscript (`manuscript_ready`, `data_validated_by_PI`, `source_dataset_status: final_or_PI_confirmed` in `figures/paper/Fig5_dual_channel/Fig5_dual_channel_meta.json`).
+- **Fig. 6 (draft):** Common-mode suppression is **not** manuscript-final. Continue searching **paired** red/green power-fluctuation captures (candidate pool: `power_common_mode/**` JPEG timelines, including `P90/` subsets used for pooled CV). **Do not** silently replace the published plot until verified paired recomputation of η / G:R CV; current η summary bar may remain **manuscript-derived** (see `Fig6_common_mode_suppression_meta.json`).
+
 ## Chinese text in figures
 
-- Raster audit requires OCR; **SVG/PDF** should be scanned before submission (see `scripts/paper_figures/sanity.py`).
+- Raster audit requires OCR; **SVG** text is scanned by `scripts/paper_figures/sanity.py` for CJK; **PDF** should still be checked before submission if text is vectorized unusually.
 - Paths may contain CJK: filter `cjk_in_path=true` in the inventory CSV.
