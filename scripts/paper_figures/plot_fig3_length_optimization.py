@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Fig. 3 — Fiber length optimization (verified `length_optimization_green` only).
+Layout: 2×2 panels, no twin y-axes.
 """
 from __future__ import annotations
 
@@ -8,6 +9,7 @@ import sys
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import pandas as pd
 
@@ -22,6 +24,8 @@ from paper_figures.style import (  # noqa: E402
     COL_BLUE,
     COL_ORANGE,
     COL_MAROON,
+    DOUBLE_COL_W,
+    FONT_SIZE_LEGEND,
     apply_style,
     figure_root,
     panel_label,
@@ -31,9 +35,9 @@ from paper_figures.style import (  # noqa: E402
 
 CSV_PATH = REPO_ROOT / "results" / "length_optimization_green" / "tables" / "per_length_summary.csv"
 OPTIMAL_PATH = REPO_ROOT / "results" / "length_optimization_green" / "optimal_length.json"
-# Measurement sweep in `length_optimization_green` (total fiber length in cm = length_mm/10).
-# PI-confirmed optimum for the manuscript: **9 cm total fiber length** (row Fiber9cm), not green-path-only length.
 ALLOWED_MM = {80, 90, 110, 130, 160}
+SELECTED_CM = 9.0
+COL_VLINE = "#999999"
 
 
 def main() -> None:
@@ -56,61 +60,101 @@ def main() -> None:
         bad = lengths - ALLOWED_MM
         raise ValueError(
             f"Unexpected length_mm values {bad}. Refusing to plot mixed-era lengths "
-            f"(expected subset of {sorted(ALLOWED_MM)} mm). Legacy 5/30/45 cm style datasets "
-            f"are archived and must not be mixed — see docs/figure_audit_report.md."
+            f"(expected subset of {sorted(ALLOWED_MM)} mm)."
         )
 
-    df = df.sort_values("length_mm")
-    xs = df["length_mm"].astype(float) / 10.0
-    col_vline = "#999999"
-    green = df["green_loss_dB_mean"].astype(float)
-    green_e = df.get("green_loss_dB_std", pd.Series([0.0] * len(df)))
-    red = df["red_loss_dB_mean"].astype(float)
-    red_e = df.get("red_loss_dB_std", pd.Series([0.0] * len(df)))
-    intra = df["intra_distance_mean"].astype(float)
-    inter = df["inter_distance"].astype(float)
-    ratio = df["inter_intra_ratio"].astype(float)
-    ent = df["entropy_bits_mean"].astype(float)
-    ent_e = df["entropy_bits_std"].astype(float)
+    df = df.sort_values("length_mm").reset_index(drop=True)
+    xs = (df["length_mm"].astype(float) / 10.0).to_numpy()
+    green = df["green_loss_dB_mean"].astype(float).to_numpy()
+    green_e = df["green_loss_dB_std"].astype(float).to_numpy() if "green_loss_dB_std" in df else np.zeros(len(df))
+    red = df["red_loss_dB_mean"].astype(float).to_numpy()
+    red_e = df["red_loss_dB_std"].astype(float).to_numpy() if "red_loss_dB_std" in df else np.zeros(len(df))
+    intra = df["intra_distance_mean"].astype(float).to_numpy()
+    inter = df["inter_distance"].astype(float).to_numpy()
+    ratio = df["inter_intra_ratio"].astype(float).to_numpy()
+    ent = df["entropy_bits_mean"].astype(float).to_numpy()
+    ent_e = df["entropy_bits_std"].astype(float).to_numpy()
 
-    fig, axes = plt.subplots(1, 3, figsize=(7.2, 2.5))
-    # (a) loss
-    ax = axes[0]
-    ax.errorbar(xs, green, yerr=green_e, marker="o", lw=1.2, capsize=2.5, color=COL_GREEN, label="Green ~520 nm")
-    ax.errorbar(xs, red, yerr=red_e, marker="s", lw=1.2, capsize=2.5, color=COL_RED, label="Red ~650 nm")
-    ax.axvline(9.0, color=col_vline, ls=":", lw=1.0)
-    ax.set_xlabel("Total fiber length (cm)")
-    ax.set_ylabel("Transmission loss (dB)")
-    ax.legend(frameon=False, loc="upper left", bbox_to_anchor=(0, 1.18), ncol=2)
-    panel_label(ax, "a")
-    # (b) distances + ratio
-    axb = axes[1]
-    w = 0.35
-    axb.bar(xs - w / 2, intra, width=w, label="Intra-class distance", color=COL_BLUE, edgecolor="white", lw=0.35)
-    axb.bar(xs + w / 2, inter, width=w, label="Inter-class distance", color=COL_ORANGE, edgecolor="white", lw=0.35)
-    axb2 = axb.twinx()
-    axb2.plot(xs, ratio, "D--", color=COL_MAROON, ms=3.5, lw=1.1, label="Inter/intra ratio")
-    axb2.set_ylabel("Inter/intra distance ratio")
-    axb.set_xlabel("Total fiber length (cm)")
-    axb.set_ylabel(r"Mean $L_2$ distance (ROI)")
-    axb.axvline(9.0, color=col_vline, ls=":", lw=1.0)
-    h1, l1 = axb.get_legend_handles_labels()
-    h2, l2 = axb2.get_legend_handles_labels()
-    axb.legend(h1 + h2, l1 + l2, frameon=False, loc="upper left", bbox_to_anchor=(0, 1.28), ncol=2, fontsize=6)
-    panel_label(axb, "b")
-    axb.spines["top"].set_visible(False)
-    axb2.spines["top"].set_visible(False)
-    # (c) entropy
-    axc = axes[2]
-    lo = ent - ent_e
-    hi = ent + ent_e
-    axc.fill_between(xs, lo, hi, alpha=0.22, color=COL_GREEN)
-    axc.plot(xs, ent, "o-", color=COL_GREEN, lw=1.2, ms=4)
-    axc.axvline(9.0, color=col_vline, ls=":", lw=1.0)
-    axc.set_xlabel("Total fiber length (cm)")
-    axc.set_ylabel("Shannon entropy (bits)")
-    panel_label(axc, "c")
-    fig.subplots_adjust(top=0.82, bottom=0.18, wspace=0.4)
+    fig, axes = plt.subplots(
+        2, 2,
+        figsize=(DOUBLE_COL_W, 5.5),
+        layout="constrained",
+    )
+    ax_a, ax_b = axes[0]
+    ax_c, ax_d = axes[1]
+
+    # (a) Transmission loss
+    mg = np.isfinite(green)
+    mr = np.isfinite(red)
+    ax_a.errorbar(
+        xs[mg], green[mg], yerr=green_e[mg], marker="o", ms=4, lw=1.1, capsize=2.5,
+        color=COL_GREEN, label="Green ~520 nm",
+    )
+    ax_a.errorbar(
+        xs[mr], red[mr], yerr=red_e[mr], marker="s", ms=4, lw=1.1, capsize=2.5,
+        color=COL_RED, label="Red ~650 nm",
+    )
+    ax_a.axvline(SELECTED_CM, color=COL_VLINE, ls="--", lw=1.0, zorder=0)
+    ax_a.set_xlabel("Total fiber length (cm)")
+    ax_a.set_ylabel("Transmission loss (dB)")
+    ax_a.legend(
+        frameon=False, loc="lower center", bbox_to_anchor=(0.5, 1.02),
+        ncol=2, fontsize=FONT_SIZE_LEGEND,
+    )
+    ax_a.text(
+        0.98, 0.94, "Selected: 9 cm", transform=ax_a.transAxes,
+        ha="right", va="top", fontsize=FONT_SIZE_LEGEND, color="#444444",
+    )
+    panel_label(ax_a, "a")
+
+    # (b) Mean L2 distance — intra / inter only
+    if len(xs) > 1:
+        bar_w = 0.32 * float(np.min(np.diff(xs)))
+    else:
+        bar_w = 0.35
+    for i, x in enumerate(xs):
+        ax_b.bar(
+            x - bar_w / 2, intra[i], width=bar_w, color=COL_BLUE,
+            edgecolor="white", linewidth=0.4,
+        )
+        ax_b.bar(
+            x + bar_w / 2, inter[i], width=bar_w, color=COL_ORANGE,
+            edgecolor="white", linewidth=0.4,
+        )
+    h_intra = mpatches.Patch(facecolor=COL_BLUE, edgecolor="white", linewidth=0.4, label="Intra-class")
+    h_inter = mpatches.Patch(facecolor=COL_ORANGE, edgecolor="white", linewidth=0.4, label="Inter-class")
+    ax_b.legend(
+        handles=[h_intra, h_inter], frameon=False, loc="lower center",
+        bbox_to_anchor=(0.5, 1.02), ncol=2, fontsize=FONT_SIZE_LEGEND,
+    )
+    ax_b.set_xlabel("Total fiber length (cm)")
+    ax_b.set_ylabel(r"Mean $L_2$ distance (ROI)")
+    panel_label(ax_b, "b")
+
+    # (c) Inter/intra ratio
+    ax_c.plot(xs, ratio, "D-", color=COL_MAROON, ms=5, lw=1.15)
+    ax_c.axvline(SELECTED_CM, color=COL_VLINE, ls="--", lw=1.0, zorder=0)
+    ax_c.set_xlabel("Total fiber length (cm)")
+    ax_c.set_ylabel("Inter/intra ratio")
+    imax = int(np.nanargmax(ratio))
+    if np.isfinite(ratio[imax]) and abs(xs[imax] - SELECTED_CM) < 0.25:
+        ax_c.text(
+            0.97, 0.96, "Maximum at 9 cm", transform=ax_c.transAxes,
+            ha="right", va="top", fontsize=FONT_SIZE_LEGEND, color="#444444",
+        )
+    panel_label(ax_c, "c")
+
+    # (d) Shannon entropy
+    lo, hi = ent - ent_e, ent + ent_e
+    ax_d.fill_between(xs, lo, hi, alpha=0.22, color=COL_GREEN)
+    ax_d.plot(xs, ent, "o-", color=COL_GREEN, lw=1.15, ms=4.5)
+    ax_d.axvline(SELECTED_CM, color=COL_VLINE, ls="--", lw=1.0, zorder=0)
+    ax_d.set_xlabel("Total fiber length (cm)")
+    ax_d.set_ylabel("Shannon entropy (bits)")
+    panel_label(ax_d, "d")
+
+    for ax in (ax_a, ax_b, ax_c, ax_d):
+        ax.set_xticks(xs)
 
     out_dir = figure_root(REPO_ROOT) / "Fig3_length_optimization"
     base = "Fig3_length_optimization"

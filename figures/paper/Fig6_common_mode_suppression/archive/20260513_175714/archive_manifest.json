@@ -1,0 +1,27 @@
+{
+  "archive_stamp": "20260513_175714",
+  "archive_dir": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig6_common_mode_suppression/archive/20260513_175714",
+  "figure_stem": "Fig6_common_mode_suppression",
+  "moved_files": [
+    {
+      "from": "Fig6_common_mode_suppression.pdf",
+      "to": "archive/20260513_175714/Fig6_common_mode_suppression.pdf"
+    },
+    {
+      "from": "Fig6_common_mode_suppression.png",
+      "to": "archive/20260513_175714/Fig6_common_mode_suppression.png"
+    },
+    {
+      "from": "Fig6_common_mode_suppression.svg",
+      "to": "archive/20260513_175714/Fig6_common_mode_suppression.svg"
+    },
+    {
+      "from": "Fig6_common_mode_suppression_data.csv",
+      "to": "archive/20260513_175714/Fig6_common_mode_suppression_data.csv"
+    },
+    {
+      "from": "Fig6_common_mode_suppression_meta.json",
+      "to": "archive/20260513_175714/Fig6_common_mode_suppression_meta.json"
+    }
+  ]
+}

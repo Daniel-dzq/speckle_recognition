@@ -32,8 +32,8 @@ DOUBLE_COL_W = 7.08  # ~180 mm
 GOLDEN_RATIO = 1.618
 
 FONT_SIZE_TICK = 7
-FONT_SIZE_LABEL = 8
-FONT_SIZE_PANEL = 9
+FONT_SIZE_LABEL = 9
+FONT_SIZE_PANEL = 10
 FONT_SIZE_LEGEND = 7
 
 DPI_PNG = 600
@@ -57,7 +57,6 @@ def apply_style() -> None:
         "figure.facecolor": "white",
         "axes.facecolor": "white",
         "savefig.facecolor": "white",
-        "savefig.bbox": "tight",
     })
 
 
@@ -89,10 +88,11 @@ def save_figure_bundle(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
     paths: Dict[str, str] = {}
+    tight = {"bbox_inches": "tight", "pad_inches": 0.08}
     for ext, kwargs in (
-        ("png", {"dpi": DPI_PNG}),
-        ("pdf", {}),
-        ("svg", {}),
+        ("png", {"dpi": DPI_PNG, **tight}),
+        ("pdf", dict(tight)),
+        ("svg", dict(tight)),
     ):
         p = output_dir / f"{base_name}.{ext}"
         fig.savefig(p, **kwargs)

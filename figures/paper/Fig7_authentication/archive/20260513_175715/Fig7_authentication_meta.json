@@ -1,0 +1,15 @@
+{
+  "generated_utc": "2026-05-13T07:14:43.385360+00:00",
+  "script": "plot_fig7_authentication.py",
+  "output_dir": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig7_authentication",
+  "base_name": "Fig7_authentication",
+  "dpi_png": 600,
+  "auth_matrix_json": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/results/fiber_auth/auth_matrix.json",
+  "unified_predictions_csv": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/results/unified/test_predictions.csv",
+  "auxiliary_csv": [
+    "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig7_authentication/Fig7_authentication_roc_curve.csv",
+    "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig7_authentication/Fig7_authentication_letter_confusion.csv",
+    "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/figures/paper/Fig7_authentication/Fig7_authentication_fiber_matrix.csv"
+  ],
+  "note": "7-day stability time series not in repository."
+}

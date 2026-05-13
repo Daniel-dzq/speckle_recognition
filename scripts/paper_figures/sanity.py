@@ -13,8 +13,15 @@ FIG_PAPER = ROOT / "figures" / "paper"
 
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 
-FIG6_EXPECTED_REASON = (
-    "G/R ratio not fully recomputed from verified paired red/green raw images yet."
+FIG6_WARNING_EXPECTED = (
+    "G/R ratio values are not final until paired red/green raw data are verified."
+)
+
+FIG7_SAFE_CLAIM = (
+    "The 5×5 matrix supports fiber/device specificity and cross-fiber rejection behavior."
+)
+FIG7_UNSAFE_CLAIM = (
+    "Do not claim final ROC/EER or threshold authentication from this figure."
 )
 
 
@@ -80,8 +87,17 @@ def policy_errors(fig_dir: Path, base: str, meta: dict) -> list[str]:
     if base == "Fig6_common_mode_suppression":
         if meta.get("manuscript_ready") is not False:
             errs.append(f"{base}: meta manuscript_ready must be false (draft)")
-        if meta.get("reason") != FIG6_EXPECTED_REASON:
-            errs.append(f"{base}: meta reason must match draft G/R verification string")
+        if meta.get("data_status") != "draft":
+            errs.append(f"{base}: meta data_status must be draft")
+        if meta.get("warning") != FIG6_WARNING_EXPECTED:
+            errs.append(f"{base}: meta warning must match expected draft paired-data notice")
+    if base == "Fig7_authentication":
+        if meta.get("manuscript_ready") is not False:
+            errs.append(f"{base}: meta manuscript_ready must be false until PI confirms")
+        if meta.get("safe_claim") != FIG7_SAFE_CLAIM:
+            errs.append(f"{base}: meta safe_claim must match expected string")
+        if meta.get("unsafe_claim") != FIG7_UNSAFE_CLAIM:
+            errs.append(f"{base}: meta unsafe_claim must match expected string")
     return errs
 
 
