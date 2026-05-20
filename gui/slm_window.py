@@ -66,6 +66,35 @@ def _find_letter_png(letter: str) -> str | None:
     return None
 
 
+def _find_challenge_png(label: str) -> str | None:
+    """Look up a PNG for an arbitrary challenge label (letter, digit, avatar name, etc.)."""
+    key = (label or "").strip()
+    if not key:
+        return None
+    candidates = [
+        key,
+        key.lower(),
+        key.upper(),
+        key.replace(" ", "_"),
+        key.replace(" ", "-"),
+    ]
+    if len(key) == 1 and key.isalpha():
+        found = _find_letter_png(key.upper())
+        if found:
+            return found
+    seen: set[str] = set()
+    for base in _letter_image_search_roots():
+        for stem in candidates:
+            if stem in seen:
+                continue
+            seen.add(stem)
+            for ext in (".png", ".PNG", ".jpg", ".jpeg", ".bmp"):
+                path = os.path.join(base, stem + ext)
+                if os.path.isfile(path):
+                    return path
+    return None
+
+
 class SLMViewport(QWidget):
     """
     Paints SLM content. QLabel+scaled QPixmap is unreliable on some macOS
@@ -245,47 +274,47 @@ class SLMWindow(QWidget):
         self._slm_log(f"[SLM] set_diagnostic_pattern: letter={self._diag_letter}")
         self.force_visual_refresh()
 
-    def set_letter(self, letter: str) -> None:
+    def set_text_challenge(self, label: str) -> None:
+        """Render a text challenge on the SLM (letters, digits, short labels)."""
         self._diagnostic_active = False
         self._color_bar.hide()
-        letter = letter.strip().upper() if letter.strip() else " "
-        self._slm_log(f"[SLM] set_letter: {letter!r}")
-        self._current_letter = letter
+        text = (label or "").strip() or " "
+        self._slm_log(f"[SLM] set_text_challenge: {text!r}")
+        self._current_letter = text
         self._pixmap_source = None
         self._last_png_path = None
         self._last_png_diagnostic = None
 
-        if letter.isalpha() and len(letter) == 1:
-            if _env_truthy("SPECKLE_SLM_TEXT_ONLY"):
-                self._slm_log(
-                    "[SLM] SPECKLE_SLM_TEXT_ONLY=1: skipping PNG, using large text only"
+        if not _env_truthy("SPECKLE_SLM_TEXT_ONLY"):
+            img_path = _find_challenge_png(text)
+            if img_path is None:
+                roots = _letter_image_search_roots()
+                self._last_png_diagnostic = (
+                    f"No image for {text!r} (using Qt painter text). Searched: {roots}"
                 )
+                self._slm_log(f"[SLM] {self._last_png_diagnostic}")
             else:
-                img_path = _find_letter_png(letter)
-                if img_path is None:
-                    roots = _letter_image_search_roots()
+                pix = QPixmap(img_path)
+                if pix.isNull():
+                    im = QImage(img_path)
+                    if not im.isNull():
+                        pix = QPixmap.fromImage(im)
+                if pix.isNull():
                     self._last_png_diagnostic = (
-                        f"No PNG for '{letter}.png' (using Qt painter text). Searched: {roots}"
+                        f"Decode failed, painter text fallback: {img_path}"
                     )
                     self._slm_log(f"[SLM] {self._last_png_diagnostic}")
                 else:
-                    pix = QPixmap(img_path)
-                    if pix.isNull():
-                        im = QImage(img_path)
-                        if not im.isNull():
-                            pix = QPixmap.fromImage(im)
-                    if pix.isNull():
-                        self._last_png_diagnostic = (
-                            f"Decode failed, painter text fallback: {img_path}"
-                        )
-                        self._slm_log(f"[SLM] {self._last_png_diagnostic}")
-                    else:
-                        self._pixmap_source = pix
-                        self._last_png_path = img_path
+                    self._pixmap_source = pix
+                    self._last_png_path = img_path
 
         self.force_visual_refresh()
-        self._slm_log("[SLM] content updated (set_letter) [QPainter viewport]")
-        self.letter_changed.emit(letter)
+        self._slm_log("[SLM] content updated (set_text_challenge)")
+        self.letter_changed.emit(text)
+
+    def set_letter(self, letter: str) -> None:
+        """Backward-compatible alias for single-character letter challenges."""
+        self.set_text_challenge(letter)
 
     def png_load_diagnostic(self) -> str | None:
         return self._last_png_diagnostic

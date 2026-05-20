@@ -208,18 +208,18 @@ def run_auto(out_dir: str) -> list[dict]:
     _pulse(app, 220)
     snap(os.path.join(out_dir, "screenshot_step_camera_on.png"), "manual speckle placeholder feed")
 
-    # 5 model
+    # 5 model (MainWindow auto-loads at startup; use placeholder only if weights missing / load failed)
     models = discover_fiber_models(FIBER_MODELS_DIR)
+    _pulse(app, 500)
     if models:
-        first = sorted(models.keys())[0]
-        idx = win._combo_fiber.findText(first)  # pylint: disable=protected-access
-        if idx >= 0:
-            win._combo_fiber.setCurrentIndex(idx)  # pylint: disable=protected-access
-        _pulse(app, 500)
-        st = win._lbl_model_status.text()  # pylint: disable=protected-access
-        if "Loaded:" not in st:
+        worker = win._infer_worker  # pylint: disable=protected-access
+        loaded = getattr(worker, "_model", None) is not None
+        if not loaded:
             win.apply_manual_screenshot_model_fallback_ui()  # pylint: disable=protected-access
-            print(f"[auto] model status not Loaded ({st!r}); using placeholder UI", file=sys.stderr)
+            print(
+                "[auto] inference worker has no model after startup; using placeholder UI",
+                file=sys.stderr,
+            )
     else:
         win.apply_manual_screenshot_model_fallback_ui()  # pylint: disable=protected-access
         print("[auto] no Fiber*.pth found; using placeholder Loaded UI", file=sys.stderr)

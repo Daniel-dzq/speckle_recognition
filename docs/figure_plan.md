@@ -5,7 +5,7 @@ English-only exports target `figures/paper/` (see `scripts/generate_all_paper_fi
 | Fig. | Topic | Primary data / assets | Status |
 |------|-------|------------------------|--------|
 | **1** | Concept: dual-channel PUF, red reference vs green challenge, authentication flow | Patent block diagram (`README_source_patent_fig1_block_diagram.png`); future vector composite | **Source assets staged** — final vector TBD |
-| **2** | Experimental setup: end-face red, green + SLM + side polish, CMOS/CCD | `README_source_optical_path_render.png` | **Source assets staged** |
+| **2** | Experimental setup: end-face red, green + SLM + side polish, CMOS/CCD | `figures/paper/Fig2_setup/`: **`Fig2_optical_setup_9cm.blend`** + `*_render.png` / `*_polish_closeup.png` + composed **`Fig2_optical_setup_9cm.{png,pdf,svg}`** + **`Fig2_optical_setup_9cm_semieditable.pptx`** (`scripts/paper_figures/blender_fig2_setup/` + `compose_fig2_blender_final.py`) | **Blender semi-3D + overlays** — 9 cm POF **5 + 1 + 3 cm** |
 | **3** | Length optimization: loss; intra/inter + ratio; entropy | `results/length_optimization_green/tables/per_length_summary.csv` | **Auto-generated** (`Fig3_length_optimization/`) — **PI-confirmed** optimum **9 cm total fiber length** (see metadata / audit) |
 | **4** | Surface / entropy source: polish, microscope, roughness, speckle diversity | Microscope + profilometer exports **missing** | **TODO** — see audit report |
 | **5** | Dual-channel behaviour: stability, perturbation, speckle, profiles | `figures/new_datasets_analysis/metrics_summary.json` + `videocapture/` | **Auto-generated** (`Fig5_dual_channel/`) — **PI-confirmed valid** for manuscript (`manuscript_ready`, `data_validated_by_PI`) |

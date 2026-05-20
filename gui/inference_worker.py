@@ -1,8 +1,9 @@
 """
 Inference worker thread.
 
-Receives frames from the camera worker, accumulates them into a sliding
-window, and runs the loaded speckle recognition model periodically.
+Receives frames from the camera worker via a bounded queue, accumulates them
+into a sliding window, and runs the loaded speckle recognition model on this
+thread—never blocking the Qt GUI thread.
 
 Features:
   - Sliding window frame buffer (size = clip_len)
@@ -14,7 +15,9 @@ Features:
 
 import os
 import sys
+import queue
 import collections
+import threading
 import numpy as np
 import time
 
@@ -27,6 +30,20 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from models import get_model
+
+
+def _demo_trace(msg: str) -> None:
+    if os.environ.get("SPECKLE_DEMO_TRACE", "").strip().lower() not in (
+        "1", "true", "yes", "on",
+    ):
+        return
+    t = threading.current_thread()
+    ts = time.strftime("%H:%M:%S")
+    print(
+        f"[SPECKLE_DEMO_TRACE {ts} thread={t.name!r} ident={threading.get_ident()}] "
+        f"{msg}",
+        flush=True,
+    )
 
 
 class InferenceWorker(QThread):
@@ -46,30 +63,32 @@ class InferenceWorker(QThread):
     """
 
     prediction_ready = Signal(dict)
-    model_loaded     = Signal(str)
-    error            = Signal(str)
+    model_loaded = Signal(str)
+    error = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._model       = None
+        self._model = None
         self._class_names = []
-        self._clip_len    = 16
-        self._img_size    = 224
-        self._input_mode  = "gray"    # "gray" (legacy) or "rgb" (unified model)
-        self._device      = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._clip_len = 16
+        self._img_size = 224
+        self._input_mode = "gray"    # "gray" (legacy) or "rgb" (unified model)
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self._frame_buffer  = collections.deque(maxlen=self._clip_len)
-        self._vote_buffer   = collections.deque(maxlen=10)   # last N predictions for voting
+        self._frame_buffer = collections.deque(maxlen=self._clip_len)
+        self._vote_buffer = collections.deque(maxlen=10)   # last N predictions for voting
         self._new_frame_cnt = 0
-        self._infer_every   = 4    # run inference every N new frames
-        self._top_k         = 5
+        self._infer_every = 4    # run inference every N new frames
+        self._top_k = 5
 
-        self._running = False
+        self._buf_lock = threading.Lock()
+        self._frame_queue: queue.Queue = queue.Queue(maxsize=2)
+        self._quit = threading.Event()
 
         # ImageNet normalization stats (matches dataset.py)
         self._mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        self._std  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
+        self._std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
 
     # ── Model loading ──────────────────────────────────────────────────
 
@@ -78,29 +97,35 @@ class InferenceWorker(QThread):
         try:
             ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
-            model_type  = ckpt.get("model_type",  "cnn_pool")
-            num_classes = ckpt.get("num_classes",  26)
-            class_names = ckpt.get("class_names",  [chr(65 + i) for i in range(26)])
-            clip_len    = ckpt.get("clip_len",      16)
-            img_size    = ckpt.get("img_size",      224)
-            fiber_name  = ckpt.get("fiber_name",    "unknown")
+            model_type = ckpt.get("model_type", "cnn_pool")
+            num_classes = ckpt.get("num_classes", 26)
+            class_names = ckpt.get("class_names", [chr(65 + i) for i in range(26)])
+            clip_len = ckpt.get("clip_len", 16)
+            img_size = ckpt.get("img_size", 224)
+            fiber_name = ckpt.get("fiber_name", "unknown")
 
             model = get_model(model_type, num_classes, pretrained=False)
             model.load_state_dict(ckpt["model_state_dict"])
             model.eval()
             model.to(self._device)
 
-            self._model       = model
-            self._class_names = class_names
-            self._clip_len    = clip_len
-            self._img_size    = img_size
-            self._input_mode  = ckpt.get("input_mode", "gray")
-            self._frame_buffer = collections.deque(maxlen=clip_len)
-            self._vote_buffer.clear()
+            input_mode = ckpt.get("input_mode", "gray")
 
-            msg = (f"Model loaded: {fiber_name}  |  {model_type}  |  "
-                   f"classes={num_classes}  clip_len={clip_len}  "
-                   f"input={self._input_mode}  device={self._device}")
+            with self._buf_lock:
+                self._model = model
+                self._class_names = class_names
+                self._clip_len = clip_len
+                self._img_size = img_size
+                self._input_mode = input_mode
+                self._frame_buffer = collections.deque(maxlen=clip_len)
+                self._vote_buffer.clear()
+                self._new_frame_cnt = 0
+
+            msg = (
+                f"Model loaded: {fiber_name}  |  {model_type}  |  "
+                f"classes={num_classes}  clip_len={clip_len}  "
+                f"input={self._input_mode}  device={self._device}"
+            )
             self.model_loaded.emit(msg)
             return True
 
@@ -118,32 +143,71 @@ class InferenceWorker(QThread):
 
     def set_vote_window(self, n: int):
         maxlen = max(1, n)
-        old = list(self._vote_buffer)
-        self._vote_buffer = collections.deque(old[-maxlen:], maxlen=maxlen)
+        with self._buf_lock:
+            old = list(self._vote_buffer)
+            self._vote_buffer = collections.deque(old[-maxlen:], maxlen=maxlen)
 
-    # ── Frame ingestion ────────────────────────────────────────────────
+    # ── Frame ingestion (GUI thread — non-blocking) ─────────────────────
 
     def push_frame(self, frame: np.ndarray):
-        """
-        Called from the main thread whenever a new camera frame arrives.
-        Preprocesses and buffers the frame; triggers inference periodically.
-        """
+        """Enqueue a frame copy for processing on the inference thread."""
         if self._model is None:
             return
+        if not self.isRunning():
+            _demo_trace("push_frame skipped: inference thread not running")
+            return
 
-        processed = self._preprocess_frame(frame)
-        self._frame_buffer.append(processed)
-        self._new_frame_cnt += 1
+        _demo_trace(f"push_frame enqueue shape={frame.shape}")
+        try:
+            self._frame_queue.put_nowait(np.copy(frame))
+        except queue.Full:
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._frame_queue.put_nowait(np.copy(frame))
+            except queue.Full:
+                pass
 
-        if (self._new_frame_cnt >= self._infer_every and
-                len(self._frame_buffer) >= self._clip_len):
-            self._new_frame_cnt = 0
-            self._run_inference()
+    def run(self):
+        """Drain the queue and run inference here—not on the GUI thread."""
+        while not self._quit.is_set():
+            try:
+                frame = self._frame_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
+            if frame is None:
+                break
+            try:
+                self._process_frame(frame)
+            except Exception as exc:
+                self.error.emit(f"Inference worker loop error: {exc}")
+
+    def _process_frame(self, frame: np.ndarray):
+        with self._buf_lock:
+            if self._model is None:
+                return
+
+            processed = self._preprocess_frame(frame)
+            self._frame_buffer.append(processed)
+            self._new_frame_cnt += 1
+
+            if (
+                self._new_frame_cnt >= self._infer_every
+                and len(self._frame_buffer) >= self._clip_len
+            ):
+                self._new_frame_cnt = 0
+                t0 = time.perf_counter()
+                _demo_trace("inference start")
+                self._run_inference()
+                _demo_trace(f"inference end dt_ms={(time.perf_counter()-t0)*1000:.1f}")
 
     def _preprocess_frame(self, frame: np.ndarray) -> np.ndarray:
         """BGR uint8 -> normalized float32 (3, H, W) matching dataset.py."""
-        resized = cv2.resize(frame, (self._img_size, self._img_size),
-                             interpolation=cv2.INTER_AREA)
+        resized = cv2.resize(
+            frame, (self._img_size, self._img_size), interpolation=cv2.INTER_AREA
+        )
 
         if self._input_mode == "rgb":
             if len(resized.shape) == 2:
@@ -168,6 +232,7 @@ class InferenceWorker(QThread):
 
     @torch.no_grad()
     def _run_inference(self):
+        """Call with self._buf_lock held."""
         frames = list(self._frame_buffer)[-self._clip_len:]
         if len(frames) < self._clip_len:
             return
@@ -178,7 +243,7 @@ class InferenceWorker(QThread):
 
         try:
             logits = self._model(tensor)                  # (1, num_classes)
-            probs  = F.softmax(logits, dim=1)[0]          # (num_classes,)
+            probs = F.softmax(logits, dim=1)[0]          # (num_classes,)
 
             top_probs, top_idxs = torch.topk(probs, min(self._top_k, len(self._class_names)))
             top1_name = self._class_names[top_idxs[0].item()]
@@ -191,28 +256,32 @@ class InferenceWorker(QThread):
 
             # Voting smoothing
             self._vote_buffer.append(top1_name)
-            counts  = collections.Counter(self._vote_buffer)
+            counts = collections.Counter(self._vote_buffer)
             smoothed = counts.most_common(1)[0][0]
 
             self.prediction_ready.emit({
-                "top1":        top1_name,
-                "confidence":  top1_conf,
-                "topk":        topk,
-                "smoothed":    smoothed,
+                "top1": top1_name,
+                "confidence": top1_conf,
+                "topk": topk,
+                "smoothed": smoothed,
                 "frame_count": len(self._frame_buffer),
             })
 
         except Exception as e:
             self.error.emit(f"Inference error: {e}")
 
-    # ── Thread run (not actually used as a thread - worker is driven by signals) ──
-
-    def run(self):
-        """Not used directly - inference is triggered via push_frame() from main thread."""
-        self._running = True
-        while self._running:
-            time.sleep(0.1)
-
     def stop(self):
-        self._running = False
-        self.wait(2000)
+        """Request shutdown and wait for the thread to exit."""
+        self._quit.set()
+        try:
+            self._frame_queue.put_nowait(None)
+        except queue.Full:
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                self._frame_queue.put_nowait(None)
+            except queue.Full:
+                pass
+        self.wait(3000)

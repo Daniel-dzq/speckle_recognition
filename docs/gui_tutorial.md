@@ -140,9 +140,9 @@ SDK --- you can use a webcam or video file instead.
 +------------------------------+-------------------------------+
 |  LEFT PANEL (controls)       |  RIGHT PANEL (live output)    |
 |                              |                               |
-|  - Fiber & Model             |  - Live Camera Feed           |
-|  - SLM Output Window         |                               |
-|  - Camera / Video Source     |  - Recognition Output         |
+|  - SLM challenge letter      |  - Live Camera Feed           |
+|  - Camera / Video Source     |                               |
+|  - Camera Settings           |  - Recognition Output         |
 |  - Camera Settings           |    - Instant prediction       |
 |  - Inference Settings        |    - Confidence               |
 |                              |    - Smoothed (majority vote) |
@@ -154,39 +154,34 @@ SDK --- you can use a webcam or video file instead.
 
 ---
 
-## 5. Fiber & Model section
+## 5. Recognition model (no manual picker)
 
-This section selects which trained recognition model to use.
+There is **no dropdown** for choosing a checkpoint. When the GUI starts it scans
+`results/fiber_auth/fiber_models/` for `Fiber*.pth` weights and loads **one**
+automatically inside the inference worker:
 
-### Controls
+| Mechanism | What happens |
+|-----------|----------------|
+| **Default** | The **alphabetically first** `Fiber*.pth` basename (without `.pth`) is loaded. |
+| **`SPECKLE_DEFAULT_FIBER`** | If this environment variable matches one of those basenames exactly, that checkpoint is loaded instead. |
 
-| Control | Description |
-|---------|-------------|
-| **Fiber** dropdown | Lists all fibers found in `video_capture/`. Select the one matching your optical setup. |
-| **Refresh** | Rescans `video_capture/` for new fibers. |
-| **Checkpoint** dropdown | Lists `.pth` files in `checkpoints/`. The GUI tries to pre-select the file matching the chosen fiber. |
-| **Load Model** | Loads the selected checkpoint into the inference engine. |
+The **status bar** shows **`Model: …`** (for example **`Model: Fiber9cm`**).
+The **Log** prints `[MODEL]` when loading succeeds.
 
-After a successful load the model status changes to **Loaded** and the status bar
-is updated.
+After a failure or if the folder is empty, the status shows **`Model: none`** /
+**`Model: missing`** — add checkpoints (see **`README.md` § live demo**) and
+**restart** the app; there is no “Refresh models” control.
 
 ### Typical workflow
 
-1. Select the correct fiber.
-2. Select the matching checkpoint.
-3. Click **Load Model**.
-4. Confirm the log shows `Model loaded successfully`.
-
-### Troubleshooting
-
-- **No checkpoints found** --- place your trained `.pth` files in `checkpoints/`
-  and name them ending in `_best.pth`.
-- **Model load failed** --- check the log for the exact error. Common causes:
-  wrong fiber/checkpoint pair, environment mismatch, or corrupted file.
+1. Place the correct `Fiber*.pth` for your bundle in `results/fiber_auth/fiber_models/`.
+2. Optionally `export SPECKLE_DEFAULT_FIBER=Fiber9cm` (example) before launch.
+3. Start the demo; confirm **`Model:`** in the status bar.
+4. Continue with the SLM and camera sections below.
 
 ---
 
-## 6. SLM Output Window section
+## 6. SLM challenge letter section
 
 This section controls the SLM display in a multi-monitor setup.
 
@@ -344,16 +339,16 @@ Follow this order for a full optical experiment:
  2.  Connect the SLM monitor via HDMI or DisplayPort.
  3.  Run:  python scripts/launch_demo.py
  4.  Confirm the terminal banner shows  MindVision : [OK].
- 5.  Select the correct fiber in the Fiber & Model section.
- 6.  Load the matching checkpoint.
- 7.  Click Refresh in the SLM section, then select the SLM monitor.
- 8.  Enable Fullscreen, then click Move SLM to Selected Screen.
- 9.  Click MindVision CCD (HT-UBS300C) to start the live feed.
+ 5.  Confirm the status bar **Model:** line lists the checkpoint you expect
+      (optional: set `SPECKLE_DEFAULT_FIBER` before launch).
+ 6.  Click Refresh in the SLM section, then select the SLM monitor.
+ 7.  Enable Fullscreen, then click Move SLM to Selected Screen.
+ 8.  Click MindVision CCD (HT-UBS300C) to start the live feed.
      (On Windows you can also use Start Camera directly.)
-10.  Confirm speckle frames appear in the Live Camera Feed panel.
-11.  Send a letter to the SLM (or use Prev / Next to cycle).
-12.  Enable Recognition active.
-13.  Read the Smoothed prediction --- that is the real-time recognition result.
+ 9.  Confirm speckle frames appear in the Live Camera Feed panel.
+10.  Send a letter to the SLM (or use Prev / Next to cycle).
+11.  Enable Recognition active.
+12.  Read the Smoothed prediction --- that is the real-time recognition result.
 ```
 
 ---
@@ -394,14 +389,14 @@ Reload the image after the window is already positioned on the correct screen.
 
 Check all three conditions:
 
-- Model status shows **Loaded**.
+- Status bar **Model:** is not **none** / **missing** / **load failed**.
 - Camera feed is running (frames visible in the live panel).
 - **Recognition active** checkbox is ticked.
 
 ### Prediction is unstable or confidence is low
 
 - Increase **Vote window**.
-- Verify you loaded the checkpoint that matches the active fiber.
+- Verify the auto-loaded `Fiber*.pth` matches the bundle in your setup (or set `SPECKLE_DEFAULT_FIBER`).
 - Check optical alignment and reduce vibration.
 - Adjust camera exposure so the speckle pattern is clearly visible (not over- or
   under-exposed).

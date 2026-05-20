@@ -14,6 +14,8 @@ from PySide6.QtCore    import Qt, QTimer, QPropertyAnimation
 from PySide6.QtGui     import QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 
+from gui.challenge_widgets import labels_match
+from gui.demo_presentation import demo_font
 from gui.robot_canvas import RobotCanvas
 from gui.effects      import (make_glow, pulse_glow,
                                jump, joyful_spin, shiver,
@@ -47,8 +49,8 @@ class RobotPanel(QFrame):
 
         # ── Robot canvas ─────────────────────────────────────
         self.robot = RobotCanvas(self)
-        self.robot.setMinimumHeight(280)
-        v.addWidget(self.robot, stretch=3)
+        self.robot.setMinimumHeight(220)
+        v.addWidget(self.robot, stretch=3, alignment=Qt.AlignHCenter)
 
         # ── Status banner ─────────────────────────────────────
         self.lbl_status = QLabel("STANDBY", self)
@@ -96,8 +98,14 @@ class RobotPanel(QFrame):
 
         # ── Animation references (keep alive) ─────────────────
         self._anims: list = []
+        self._challenge_label = ""
 
         self.on_idle()
+
+    def apply_metrics(self, window_height: int) -> None:
+        robot_h = max(200, min(280, int(window_height * 0.24)))
+        self.robot.setMinimumHeight(robot_h)
+        self._fit_status_heading_font()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -113,10 +121,8 @@ class RobotPanel(QFrame):
             w_avail = max(80, self.width() - 32)
         limit = max(48, w_avail - 10)
         base = self.font()
-        for fs in range(22, 10, -1):
-            f = QFont(base)
-            f.setPixelSize(fs)
-            f.setWeight(QFont.Black)
+        for fs in range(20, 12, -1):
+            f = demo_font(fs, weight=QFont.Black)
             fm = QFontMetrics(f)
             if fm.size(Qt.TextSingleLine, text).width() <= limit:
                 self.lbl_status.setFont(f)
@@ -190,12 +196,15 @@ class RobotPanel(QFrame):
                 self._do_deny(reason="Expected class 'A', got 'B'")
                 return
 
-        top1      = result.get("top1",       "?")
         conf      = float(result.get("confidence", 0.0))
         topk      = result.get("topk",       [])
         smoothed  = result.get("smoothed",   "?")
-        TARGET_KEY = "A"  # The expected authorized module signature
-        authorized = (conf >= LOW_CONFIDENCE_THRESHOLD) and (smoothed == TARGET_KEY)
+        challenge = self._challenge_label
+        pred = str(smoothed).strip() if smoothed else "?"
+        if challenge:
+            authorized = (conf >= LOW_CONFIDENCE_THRESHOLD) and labels_match(challenge, pred)
+        else:
+            authorized = False
 
         self._read_blink_timer.stop()
         self.lbl_conf.setText(f"Confidence  {conf*100:.1f}%")
@@ -206,10 +215,12 @@ class RobotPanel(QFrame):
         if authorized:
             self._do_authorize(smoothed, conf)
         else:
-            if conf < LOW_CONFIDENCE_THRESHOLD:
+            if not challenge:
+                reason = "No SLM challenge sent yet"
+            elif conf < LOW_CONFIDENCE_THRESHOLD:
                 reason = f"Low confidence ({conf*100:.0f}%)"
-            elif str(smoothed) != TARGET_KEY:
-                reason = f"Expected class '{TARGET_KEY}', got '{smoothed}'"
+            elif not labels_match(challenge, pred):
+                reason = f"Expected challenge '{challenge}', got '{pred}'"
             else:
                 reason = "Access denied"
             self._do_deny(reason=reason)
@@ -221,6 +232,40 @@ class RobotPanel(QFrame):
     def attach_banner_callback(self, fn):
         """MainWindow injects a callback to show the overlay banner on the CCD feed."""
         self._banner_callback = fn
+
+    def set_challenge_label(self, label: str) -> None:
+        """Current SLM challenge label from MainWindow (any class name)."""
+        self._challenge_label = (label or "").strip()
+
+    def set_challenge_letter(self, letter: str) -> None:
+        """Alias for set_challenge_label (backward compatibility)."""
+        self.set_challenge_label(letter)
+
+    def apply_decision(
+        self,
+        decision: str,
+        *,
+        predicted: str = "",
+        reason: str = "",
+        result: dict | None = None,
+    ) -> None:
+        """Drive robot visuals from MainWindow decision (granted / denied / waiting)."""
+        self._read_blink_timer.stop()
+        if result:
+            conf = float(result.get("confidence", 0.0))
+            topk = result.get("topk", [])
+            self.lbl_conf.setText(f"Confidence  {conf * 100:.1f}%")
+            self.lbl_topk.setText(
+                "  ".join(f"{cls} {p * 100:.0f}%" for cls, p in topk[:3])
+            )
+        low = (decision or "").strip().lower()
+        if "granted" in low:
+            self._do_authorize(predicted or "?", 1.0)
+            return
+        if "denied" in low or "unknown" in low:
+            self._do_deny(reason or decision or "Access denied")
+            return
+        self.on_idle()
 
     # ═══════════════════════════════════════════════════════
     # Internal — state transitions + animations

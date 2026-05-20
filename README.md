@@ -325,25 +325,23 @@ Window title: **Speckle-PUF Live Demo**. A banner prints in the terminal (Python
 - **Center-right:** large **camera preview** (this is **not** the SLM surface).
 - **Right strip:** **RobotPanel** (status, READING / GRANTED / DENIED, confidence, Top-K).
 - **Bottom:** **Log** text area.
-- **Status bar:** **Device** (CUDA / MPS / CPU) | **Fiber: …** | **FPS**.
+- **Status bar:** **Device** (CUDA / MPS / CPU) | **Model: …** | **FPS**.
 
-### 13.3 Fiber Authentication (models)
+### 13.3 Recognition model (auto-loaded)
 
-**Group title:** `Fiber Authentication`.
+There is **no fiber dropdown**. On startup the demo scans **`results/fiber_auth/fiber_models/`** for **`Fiber*.pth`** checkpoints (same filenames as [`discover_fiber_models`](gui/main_window.py)) and loads **one** bundle automatically:
 
-| Control | What it does |
-|---------|----------------|
-| **Authorized fiber** (dropdown) | Lists every `Fiber*.pth` found in `results/fiber_auth/fiber_models/`. |
-| **Refresh** | Rescans that directory. |
+- If **`SPECKLE_DEFAULT_FIBER`** is set to a **key** present in that map (typically the basename without `.pth`, e.g. `Fiber9cm`), that bundle is loaded.
+- Otherwise the **alphabetically first** checkpoint name is used.
 
-**There is no separate “Load model” button in the flow:** choosing a fiber triggers loading in the inference worker. On success, the status line shows **`Loaded: FiberN`** in green.
+The status bar shows **`Model: FiberN`** (or **`Model: none`** / **`Model: load failed`** if something is wrong). **`[MODEL]`** lines in the log confirm a successful torch load.
 
-**If the dropdown is empty**
+**If no checkpoints are found**
 
 1. Run `python scripts/fiber_auth_eval.py` **or**
-2. Copy correctly trained `Fiber*.pth` files into `results/fiber_auth/fiber_models/`, then click **Refresh**.
+2. Copy trained `Fiber*.pth` files into `results/fiber_auth/fiber_models/`, then **restart** the demo (there is no rescan button for models).
 
-### 13.4 SLM Output Window
+### 13.4 SLM challenge (`SLM challenge letter` group)
 
 | Control | What it does |
 |---------|----------------|
@@ -398,7 +396,7 @@ Depending on model output and thresholds, you will see states such as **STANDBY*
 
 1. Connect **camera** and **SLM monitor**.
 2. `python scripts/launch_demo.py`
-3. **Fiber Authentication:** pick `FiberN`, wait for **Loaded: FiberN**.
+3. Confirm the status bar **`Model:`** reflects the auto-loaded **`Fiber*.pth`** (or set **`SPECKLE_DEFAULT_FIBER`** before launch).
 4. **SLM:** Refresh displays → pick SLM screen → optional fullscreen → **Move SLM to Selected Screen**.
 5. **Camera:** MindVision **or** Start Camera **or** Load Video File.
 6. Confirm **live speckle** in the **center preview**.

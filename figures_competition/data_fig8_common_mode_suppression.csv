@@ -1,6 +1,0 @@
-panel,quantity,value,n_images_p90,verification,notes
-8a,CV_raw_green_pct,39.16047400774813,75,raw_data_verified,manuscript reference 38.2%
-8a,CV_eta_pct_plotted,4.3,,summary_statistics_verified,Manuscript eta CV=4.3% kept for bar-2; simple mean(G)/mean(R) pooled P90 diagnostic CV≈85.8% (does not match 4.3% with this scalar).
-8a,CV_eta_meanG_meanR_diagnostic_pool_pct,85.79621596844676,75,diagnostic_only,Not used as bar height
-8b,intra_class_NCC_raw_green,0.72,,summary_statistics_verified,illustrative baseline
-8b,intra_class_NCC_eta,0.9216,,summary_statistics_verified,+28% vs baseline

@@ -178,3 +178,7 @@ QStatusBar {
     border-top:       none;
 }
 """
+
+from gui.demo_presentation import DEMO_PRESENTATION_QSS
+
+PREMIUM_STYLE = PREMIUM_STYLE + DEMO_PRESENTATION_QSS
