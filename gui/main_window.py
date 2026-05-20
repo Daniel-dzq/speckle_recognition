@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QApplication, QMessageBox,
 )
 from PySide6.QtCore import Qt, Slot, QPoint, QTimer
-from PySide6.QtGui import QImage, QPixmap, QFont, QGuiApplication
+from PySide6.QtGui import QImage, QPixmap, QFont, QFontMetrics, QGuiApplication
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
@@ -263,20 +263,55 @@ class CameraLabel(QLabel):
     """Label that scales camera frame to fit available space."""
 
     _IDLE_PLACEHOLDER = "Waiting for speckle response"
+    _IDLE_FONT_MAX = 37
+    _IDLE_FONT_MIN = 30
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("camLabel")
         self.setAlignment(Qt.AlignCenter)
+        self.setWordWrap(False)
         self.setMinimumSize(320, 240)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self._pixmap = None
         self._show_idle_placeholder()
 
+    def _idle_stylesheet(self, font_px: int) -> str:
+        return (
+            "QLabel#camLabel {"
+            "  background-color: #000000;"
+            "  border: 2px solid #3A3A3C;"
+            "  border-radius: 14px;"
+            "  color: #AEAEB2;"
+            f"  font-size: {font_px}px;"
+            "  font-weight: 600;"
+            "}"
+        )
+
+    def _frame_stylesheet(self) -> str:
+        return (
+            "QLabel#camLabel {"
+            "  background-color: #000000;"
+            "  border: 2px solid #3A3A3C;"
+            "  border-radius: 14px;"
+            "}"
+        )
+
+    def _fit_idle_font(self) -> int:
+        w = max(120, self.width() - 8)
+        for fs in range(self._IDLE_FONT_MAX, self._IDLE_FONT_MIN - 1, -2):
+            fm = QFontMetrics(demo_font(fs, weight=QFont.DemiBold))
+            if fm.horizontalAdvance(self._IDLE_PLACEHOLDER) <= w:
+                return fs
+        return self._IDLE_FONT_MIN
+
     def _show_idle_placeholder(self) -> None:
         self._pixmap = None
         self.setPixmap(QPixmap())
-        self.setFont(demo_font(30, weight=QFont.DemiBold))
+        self.setWordWrap(False)
+        px = self._fit_idle_font() if self.width() > 40 else self._IDLE_FONT_MAX
+        self.setStyleSheet(self._idle_stylesheet(px))
+        self.setFont(demo_font(px, weight=QFont.DemiBold))
         self.setText(self._IDLE_PLACEHOLDER)
 
     def set_frame(self, frame: np.ndarray):
@@ -288,10 +323,14 @@ class CameraLabel(QLabel):
             rgb = np.ascontiguousarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
             img = QImage(rgb.tobytes(), w, h, rgb.strides[0], QImage.Format_RGB888)
         self._pixmap = QPixmap.fromImage(img)
+        self.setStyleSheet(self._frame_stylesheet())
         self._update_display()
 
     def resizeEvent(self, event):
-        self._update_display()
+        if self._pixmap is None:
+            self._show_idle_placeholder()
+        else:
+            self._update_display()
         super().resizeEvent(event)
 
     def _update_display(self):
@@ -462,8 +501,10 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(4, 0, 4, 4)
 
         self._btn_show_slm = QPushButton("Open SLM Window")
-        self._btn_show_slm.setObjectName("primary")
-        self._btn_show_slm.setMinimumHeight(48)
+        self._btn_show_slm.setObjectName("openSlmPrimary")
+        self._btn_show_slm.setMinimumHeight(72)
+        self._btn_show_slm.setMaximumHeight(76)
+        self._btn_show_slm.setFont(demo_font(23, bold=True))
         self._btn_show_slm.clicked.connect(self._toggle_slm_window)
         sl.addWidget(self._btn_show_slm, 0, 0, 1, 3)
 
@@ -706,9 +747,10 @@ class MainWindow(QMainWindow):
         title = QLabel("Live speckle response")
         title.setObjectName("camTitle")
         title.setAlignment(Qt.AlignCenter)
-        title.setFont(demo_font(26, bold=True))
+        title.setWordWrap(False)
+        title.setFont(demo_font(30, bold=True))
         outer.addWidget(title)
-        outer.addSpacing(6)
+        outer.addSpacing(8)
 
         self._cam_label = CameraLabel()
         self._cam_label.setObjectName("camLabel")

@@ -23,10 +23,12 @@ from PySide6.QtWidgets import QWidget
 
 class RobotCanvas(QWidget):
     EXPRS = ("happy", "sad", "thinking", "scanning", "angry")
+    # Smaller divisor => larger drawn robot (~30% vs 261.0 reference).
+    _DRAW_SIZE_REF = 200.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMinimumSize(260, 260)
+        self.setMinimumWidth(160)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         self._expr        = "happy"
@@ -114,11 +116,11 @@ class RobotCanvas(QWidget):
 
         w, h = self.width(), self.height()
         cx = w / 2 + self._dx
-        cy = h / 2 + self._dy + 8
+        cy = h / 2 + self._dy + 4
 
         p.translate(cx, cy)
         p.rotate(self._rot)
-        s = min(w, h) / 320.0
+        s = min(w, h) / self._DRAW_SIZE_REF
 
         self._draw_aura(p, s)
         self._draw_shadow(p, s)

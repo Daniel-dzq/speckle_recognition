@@ -37,54 +37,75 @@ def _manual_screenshot_mode_env() -> bool:
 
 class RobotPanel(QFrame):
 
+    ROBOT_HEIGHT_DEFAULT = 228
+    ROBOT_HEIGHT_MIN = 195
+    ROBOT_HEIGHT_MAX = 248
+    ROBOT_TEXT_GAP = 14
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("robotPanel")
         self.setFrameShape(QFrame.NoFrame)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         v = QVBoxLayout(self)
-        v.setContentsMargins(14, 14, 14, 14)
-        v.setSpacing(10)
+        v.setContentsMargins(10, 4, 10, 4)
+        v.setSpacing(0)
 
-        # ── Robot canvas ─────────────────────────────────────
+        # ── Robot canvas (fixed height band; status rows below) ─────────
         self.robot = RobotCanvas(self)
-        self.robot.setMinimumHeight(220)
-        v.addWidget(self.robot, stretch=3, alignment=Qt.AlignHCenter)
+        self.robot.setMinimumWidth(160)
+        self.robot.setMinimumHeight(self.ROBOT_HEIGHT_MIN)
+        self.robot.setMaximumHeight(self.ROBOT_HEIGHT_MAX)
+        self.robot.setFixedHeight(self.ROBOT_HEIGHT_DEFAULT)
+        self.robot.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        v.addWidget(self.robot, 0, Qt.AlignHCenter)
+
+        v.addSpacing(self.ROBOT_TEXT_GAP)
 
         # ── Status banner ─────────────────────────────────────
         self.lbl_status = QLabel("STANDBY", self)
         self.lbl_status.setObjectName("robotStatus")
         self.lbl_status.setAlignment(Qt.AlignCenter)
-        self.lbl_status.setWordWrap(True)
-        self.lbl_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.lbl_status.setWordWrap(False)
+        self.lbl_status.setFont(demo_font(22, weight=QFont.Bold))
+        self.lbl_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         v.addWidget(self.lbl_status)
+
+        v.addSpacing(6)
 
         # ── Sub-status (live action text) ─────────────────────
         self.lbl_action = QLabel("Awaiting fiber\u2026", self)
         self.lbl_action.setObjectName("robotAction")
         self.lbl_action.setAlignment(Qt.AlignCenter)
-        self.lbl_action.setWordWrap(True)
-        self.lbl_action.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.lbl_action.setWordWrap(False)
+        self.lbl_action.setFont(demo_font(16))
+        self.lbl_action.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         v.addWidget(self.lbl_action)
+
+        v.addSpacing(6)
 
         # ── Confidence ────────────────────────────────────────
         self.lbl_conf = QLabel("Confidence \u2014", self)
         self.lbl_conf.setObjectName("robotConf")
         self.lbl_conf.setAlignment(Qt.AlignCenter)
-        self.lbl_conf.setWordWrap(True)
-        self.lbl_conf.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.lbl_conf.setWordWrap(False)
+        self.lbl_conf.setFont(demo_font(17, weight=QFont.Bold))
+        self.lbl_conf.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         v.addWidget(self.lbl_conf)
+
+        v.addSpacing(4)
 
         # ── Top-K candidates ──────────────────────────────────
         self.lbl_topk = QLabel("", self)
         self.lbl_topk.setObjectName("robotTopK")
         self.lbl_topk.setAlignment(Qt.AlignCenter)
-        self.lbl_topk.setWordWrap(True)
-        self.lbl_topk.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.lbl_topk.setWordWrap(False)
+        self.lbl_topk.setFont(demo_font(14))
+        self.lbl_topk.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         v.addWidget(self.lbl_topk)
 
-        v.addStretch()
+        v.addStretch(1)
 
         # ── Glow effect on panel border ───────────────────────
         self._glow      = make_glow(self, COLOR_NEUTRAL, radius=24)
@@ -103,8 +124,11 @@ class RobotPanel(QFrame):
         self.on_idle()
 
     def apply_metrics(self, window_height: int) -> None:
-        robot_h = max(200, min(280, int(window_height * 0.24)))
-        self.robot.setMinimumHeight(robot_h)
+        robot_h = max(
+            self.ROBOT_HEIGHT_MIN,
+            min(self.ROBOT_HEIGHT_MAX, int(window_height * 0.21)),
+        )
+        self.robot.setFixedHeight(robot_h)
         self._fit_status_heading_font()
 
     def resizeEvent(self, event):
@@ -121,8 +145,8 @@ class RobotPanel(QFrame):
             w_avail = max(80, self.width() - 32)
         limit = max(48, w_avail - 10)
         base = self.font()
-        for fs in range(20, 12, -1):
-            f = demo_font(fs, weight=QFont.Black)
+        for fs in range(22, 17, -1):
+            f = demo_font(fs, weight=QFont.Bold)
             fm = QFontMetrics(f)
             if fm.size(Qt.TextSingleLine, text).width() <= limit:
                 self.lbl_status.setFont(f)

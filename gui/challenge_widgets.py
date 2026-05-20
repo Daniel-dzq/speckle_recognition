@@ -45,6 +45,12 @@ class ChallengePreviewWidget(QGroupBox):
 
     PREVIEW_MIN_H = 150
     PREVIEW_MAX_H = 180
+    EMPTY_PLACEHOLDER_MAX_PT = 30
+    EMPTY_PLACEHOLDER_MIN_PT = 28
+    EMPTY_PLACEHOLDER_SIDE_MARGIN = 28
+    EMPTY_PLACEHOLDER_TEXT = "No challenge selected"
+    TEXT_SYMBOL_MIN_PT = 160
+    TEXT_SYMBOL_MAX_PT = 190
 
     def __init__(self, parent=None):
         super().__init__("", parent)
@@ -59,7 +65,7 @@ class ChallengePreviewWidget(QGroupBox):
         self._preview.setObjectName("challengePreview")
         self._preview.setProperty("empty", True)
         self._preview.setAlignment(Qt.AlignCenter)
-        self._preview.setWordWrap(True)
+        self._preview.setWordWrap(False)
         self._preview.setMinimumHeight(self.PREVIEW_MIN_H)
         self._preview.setMaximumHeight(self.PREVIEW_MAX_H)
         self._preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -104,14 +110,71 @@ class ChallengePreviewWidget(QGroupBox):
         elif self._pixmap is not None:
             self._scale_preview_pixmap()
 
+    def _preview_stylesheet(
+        self,
+        *,
+        font_px: int,
+        color: str = "#E5E5EA",
+        font_weight: int = 700,
+        horizontal_padding_px: int = 0,
+    ) -> str:
+        """Inline QSS so global 14px theme does not override QLabel.setFont()."""
+        pad = ""
+        if horizontal_padding_px > 0:
+            pad = (
+                f"  padding-left: {horizontal_padding_px}px;"
+                f"  padding-right: {horizontal_padding_px}px;"
+            )
+        return (
+            "QLabel#challengePreview {"
+            f"  color: {color};"
+            "  background-color: #0A0A0C;"
+            f"  font-size: {font_px}px;"
+            f"  font-weight: {font_weight};"
+            f"{pad}"
+            "}"
+        )
+
+    def _apply_preview_font(
+        self,
+        font_px: int,
+        *,
+        color: str = "#E5E5EA",
+        weight: int = QFont.Bold,
+    ) -> None:
+        self._preview.setStyleSheet(
+            self._preview_stylesheet(font_px=font_px, color=color, font_weight=700),
+        )
+        self._preview.setFont(demo_font(font_px, weight=weight))
+
+    def _fit_empty_placeholder_font(self) -> int:
+        """Single-line placeholder; 28–30px, down to 28px if narrow."""
+        text = self.EMPTY_PLACEHOLDER_TEXT
+        w = max(
+            80,
+            self._preview.width() - 2 * self.EMPTY_PLACEHOLDER_SIDE_MARGIN,
+        )
+        for fs in (self.EMPTY_PLACEHOLDER_MIN_PT, self.EMPTY_PLACEHOLDER_MAX_PT):
+            fm = QFontMetrics(demo_font(fs, weight=QFont.DemiBold))
+            if fm.horizontalAdvance(text) <= w:
+                return fs
+        return self.EMPTY_PLACEHOLDER_MIN_PT
+
     def _show_empty_placeholder(self) -> None:
         self._preview.setProperty("empty", True)
+        self._preview.setWordWrap(False)
+        px = self._fit_empty_placeholder_font() if self._preview.width() > 40 else self.EMPTY_PLACEHOLDER_MIN_PT
         self._preview.setStyleSheet(
-            "QLabel#challengePreview { color: #D1D1D6; background-color: #0A0A0C; }"
+            self._preview_stylesheet(
+                font_px=px,
+                color="#E5E5EA",
+                font_weight=600,
+                horizontal_padding_px=6,
+            ),
         )
-        self._preview.setFont(demo_font(28, weight=QFont.DemiBold))
+        self._preview.setFont(demo_font(px, weight=QFont.DemiBold))
         self._preview.setPixmap(QPixmap())
-        self._preview.setText("No challenge selected")
+        self._preview.setText(self.EMPTY_PLACEHOLDER_TEXT)
 
     def clear_challenge(self) -> None:
         self._label = ""
@@ -164,6 +227,8 @@ class ChallengePreviewWidget(QGroupBox):
             self._scale_preview_pixmap()
         elif self._label and self._source == "text":
             self._render_text_preview(self._label)
+        elif self._preview.property("empty"):
+            self._show_empty_placeholder()
         super().resizeEvent(event)
 
     def _scale_preview_pixmap(self) -> None:
@@ -177,22 +242,18 @@ class ChallengePreviewWidget(QGroupBox):
         self._preview.setPixmap(scaled)
 
     def _render_text_preview(self, text: str) -> None:
-        w = max(120, self._preview.width() - 24)
-        h = max(80, self._preview.height() - 20)
+        w = max(120, self._preview.width() - 8)
+        h = max(80, self._preview.height() - 12)
+        self._preview.setWordWrap(False)
         display = text if len(text) <= 20 else text[:17] + "..."
-        chosen = 120
-        self._preview.setStyleSheet(
-            "QLabel#challengePreview { color: #F5F5F7; background-color: #0A0A0C; }"
-        )
-        for fs in range(150, 119, -4):
-            f = demo_font(fs, weight=QFont.Black)
+        chosen = self.TEXT_SYMBOL_MIN_PT
+        for fs in range(self.TEXT_SYMBOL_MAX_PT, self.TEXT_SYMBOL_MIN_PT - 1, -4):
+            f = demo_font(fs, weight=QFont.Bold)
             fm = QFontMetrics(f)
             if fm.size(Qt.TextSingleLine, display).width() <= w and fm.height() <= h:
                 chosen = fs
-                self._preview.setFont(f)
                 break
-        else:
-            self._preview.setFont(demo_font(chosen, weight=QFont.Black))
+        self._apply_preview_font(chosen, color="#F5F5F7")
         self._preview.setText(display)
 
 

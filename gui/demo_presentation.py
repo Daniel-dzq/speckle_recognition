@@ -148,7 +148,7 @@ QLabel#recognitionDecision {
 }
 QLabel#camTitle {
     color: #1C1C1E;
-    font-size: 26px;
+    font-size: 30px;
     font-weight: 700;
     padding-bottom: 8px;
 }
@@ -162,8 +162,23 @@ QLabel#camLabel {
     border: 2px solid #3A3A3C;
     border-radius: 14px;
     color: #AEAEB2;
-    font-size: 30px;
-    font-weight: 600;
+}
+QGroupBox#demoControlSection QPushButton#openSlmPrimary {
+    background-color: #007AFF;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 10px;
+    font-size: 23px;
+    font-weight: 700;
+    min-height: 72px;
+    max-height: 76px;
+    padding: 16px 18px;
+}
+QGroupBox#demoControlSection QPushButton#openSlmPrimary:hover {
+    background-color: #0066D6;
+}
+QGroupBox#demoControlSection QPushButton#openSlmPrimary:pressed {
+    background-color: #0052AB;
 }
 QGroupBox#demoControlSection QLabel {
     color: #1C1C1E;
@@ -217,15 +232,18 @@ QTextEdit#demoLogText {
     padding: 8px;
 }
 QLabel#robotStatus {
-    font-size: 20px;
+    font-size: 22px;
     font-weight: 800;
+    padding-top: 0px;
 }
 QLabel#robotAction {
-    font-size: 15px;
+    font-size: 16px;
+    padding-top: 2px;
 }
 QLabel#robotConf {
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 700;
+    padding-top: 2px;
 }
 QLabel#robotTopK {
     font-size: 14px;
