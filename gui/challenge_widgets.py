@@ -27,17 +27,30 @@ from gui.demo_presentation import (
 )
 
 
+def normalize_label(label: str) -> str:
+    """
+    Canonical form for challenge vs prediction comparison.
+
+    Strips whitespace, lowercases letters, keeps digits and underscores.
+    Example: Challenge "A" matches prediction "a"; "boy" matches "boy".
+    """
+    s = (label or "").strip()
+    if not s:
+        return ""
+    return "".join(c.lower() if c.isalpha() else c for c in s)
+
+
 def _normalize_label(label: str) -> str:
-    return (label or "").strip()
+    return normalize_label(label)
 
 
 def labels_match(challenge: str, predicted: str) -> bool:
-    """Case-insensitive match for arbitrary challenge / prediction labels."""
-    c = _normalize_label(challenge)
-    p = _normalize_label(predicted)
+    """Match challenge and prediction after normalize_label (case-insensitive letters)."""
+    c = normalize_label(challenge)
+    p = normalize_label(predicted)
     if not c or not p or p in ("?", "—", "-"):
         return False
-    return c.lower() == p.lower()
+    return c == p
 
 
 class ChallengePreviewWidget(QGroupBox):

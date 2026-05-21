@@ -376,16 +376,255 @@ def assign_splits_within_fiber(
 
 DEPLOY_TRAIN_RATIO = 0.70
 DEPLOY_VAL_RATIO   = 0.15
+DEPLOY_TEST_RATIO  = 1.0 - DEPLOY_TRAIN_RATIO - DEPLOY_VAL_RATIO
+
+SPLIT_STRATEGY_CONTIGUOUS = "contiguous_temporal"
+SPLIT_STRATEGY_UNIFORM = "uniform_temporal"
+SPLIT_STRATEGIES = (SPLIT_STRATEGY_UNIFORM, SPLIT_STRATEGY_CONTIGUOUS)
+
+
+def _rng_for_video(seed: int, video_id: str) -> np.random.RandomState:
+    digest = hashlib.md5(f"{seed}:{video_id}".encode()).hexdigest()
+    return np.random.RandomState(int(digest[:8], 16))
+
+
+def _partition_clip_counts(n: int, train_ratio: float, val_ratio: float) -> Tuple[int, int, int]:
+    """Return (n_train, n_val, n_test) with at least one val/test clip when n >= 3."""
+    if n <= 0:
+        return 0, 0, 0
+    if n == 1:
+        return 1, 0, 0
+    if n == 2:
+        return 1, 0, 1
+    if n == 3:
+        return 1, 1, 1
+
+    n_train = int(n * train_ratio)
+    n_val = int(n * val_ratio)
+    n_test = n - n_train - n_val
+
+    if n_test < 1:
+        n_test = 1
+        if n_val > 0:
+            n_val -= 1
+        elif n_train > 1:
+            n_train -= 1
+    if n_val < 1:
+        n_val = 1
+        if n_train > 1:
+            n_train -= 1
+        elif n_test > 1:
+            n_test -= 1
+
+    n_train = n - n_val - n_test
+    if n_train < 1:
+        n_train = 1
+        if n_test > 1:
+            n_test -= 1
+        elif n_val > 0:
+            n_val -= 1
+    return n_train, n_val, n_test
+
+
+def _assign_uniform_temporal_splits(
+    clips: List[dict],
+    seed: int,
+    video_id: str,
+    train_ratio: float = DEPLOY_TRAIN_RATIO,
+    val_ratio: float = DEPLOY_VAL_RATIO,
+) -> List[dict]:
+    """Shuffle clip indices with a fixed seed, then assign train/val/test."""
+    n = len(clips)
+    if n == 0:
+        return clips
+
+    for i, c in enumerate(clips):
+        c["clip_index"] = i
+
+    rng = _rng_for_video(seed, video_id)
+    perm = rng.permutation(n)
+    n_train, n_val, n_test = _partition_clip_counts(n, train_ratio, val_ratio)
+
+    train_set = set(int(x) for x in perm[:n_train])
+    val_set = set(int(x) for x in perm[n_train:n_train + n_val])
+    test_set = set(int(x) for x in perm[n_train + n_val:])
+
+    for i, c in enumerate(clips):
+        if i in train_set:
+            c["_split"] = "train"
+        elif i in val_set:
+            c["_split"] = "val"
+        else:
+            c["_split"] = "test"
+    return clips
+
+
+def count_clips_by_label_name(
+    train_clips: List[dict],
+    val_clips: List[dict],
+    test_clips: List[dict],
+    class_names: Optional[List[str]] = None,
+) -> dict:
+    """Per-class clip counts for train, val, and test."""
+    def tally(clips):
+        c = defaultdict(int)
+        for clip in clips:
+            name = clip.get("label_name")
+            if name is None and class_names is not None:
+                idx = clip.get("label", 0)
+                if 0 <= idx < len(class_names):
+                    name = class_names[idx]
+            if name:
+                c[name] += 1
+        return dict(c)
+
+    all_labels = set()
+    for clips in (train_clips, val_clips, test_clips):
+        for clip in clips:
+            if clip.get("label_name"):
+                all_labels.add(clip["label_name"])
+    if class_names:
+        ordered = [x for x in class_names if x in all_labels]
+        ordered.extend(sorted(all_labels - set(ordered)))
+    else:
+        ordered = sorted(all_labels)
+
+    return {
+        label: {
+            "train": tally(train_clips).get(label, 0),
+            "val": tally(val_clips).get(label, 0),
+            "test": tally(test_clips).get(label, 0),
+        }
+        for label in ordered
+    }
+
+
+def print_per_class_split_counts(
+    train_clips: List[dict],
+    val_clips: List[dict],
+    test_clips: List[dict],
+    class_names: Optional[List[str]] = None,
+) -> None:
+    """Print train/val/test clip counts per class."""
+    counts = count_clips_by_label_name(train_clips, val_clips, test_clips, class_names)
+    if not counts:
+        print("  Per-class clip counts: (none)")
+        return
+    print("  Per-class clip counts (train / val / test):")
+    for label, parts in counts.items():
+        print(
+            f"    {label:<6}  train={parts['train']:>4}  "
+            f"val={parts['val']:>4}  test={parts['test']:>4}"
+        )
+
+
+def build_fiber_split_report(
+    videos: List[dict],
+    train_clips: List[dict],
+    val_clips: List[dict],
+    test_clips: List[dict],
+    split_strategy: str,
+    seed: int,
+    class_names: Optional[List[str]] = None,
+) -> dict:
+    """Build reproducible split metadata for one fiber."""
+    by_video = defaultdict(list)
+    for split_name, clips in (
+        ("train", train_clips),
+        ("val", val_clips),
+        ("test", test_clips),
+    ):
+        for c in clips:
+            by_video[c["video_id"]].append({
+                "clip_index": c.get("clip_index"),
+                "start_frame": c["start_frame"],
+                "end_frame": c["end_frame"],
+                "split": split_name,
+            })
+
+    video_entries = []
+    for v in videos:
+        vid = v["video_id"]
+        clip_rows = sorted(
+            by_video.get(vid, []),
+            key=lambda r: (
+                r["clip_index"] if r["clip_index"] is not None else 10**9,
+                r["start_frame"],
+            ),
+        )
+        video_entries.append({
+            "video_id": vid,
+            "filename": v.get("filename"),
+            "domain": v.get("domain"),
+            "fiber": v.get("fiber"),
+            "label_name": v.get("letter"),
+            "n_frames": v.get("n_frames"),
+            "n_clips": len(clip_rows),
+            "clips": clip_rows,
+        })
+
+    return {
+        "split_strategy": split_strategy,
+        "seed": seed,
+        "train_ratio": DEPLOY_TRAIN_RATIO,
+        "val_ratio": DEPLOY_VAL_RATIO,
+        "test_ratio": DEPLOY_TEST_RATIO,
+        "per_class_counts": count_clips_by_label_name(
+            train_clips, val_clips, test_clips, class_names,
+        ),
+        "videos": video_entries,
+    }
+
+
+def save_fiber_split_report(report: dict, fiber_out: str) -> Tuple[str, str]:
+    """Write split_report.json and split_report.md under fiber_out."""
+    os.makedirs(fiber_out, exist_ok=True)
+    json_path = os.path.join(fiber_out, "split_report.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, indent=2)
+
+    lines = [
+        "# Clip split report",
+        "",
+        f"- Strategy: `{report['split_strategy']}`",
+        f"- Seed: {report['seed']}",
+        f"- Ratios: train {report['train_ratio']:.0%} / "
+        f"val {report['val_ratio']:.0%} / test {report['test_ratio']:.0%}",
+        "",
+        "## Per-class clip counts",
+        "",
+        "| Class | Train | Val | Test |",
+        "|-------|------:|----:|-----:|",
+    ]
+    for label, parts in report.get("per_class_counts", {}).items():
+        lines.append(
+            f"| {label} | {parts['train']} | {parts['val']} | {parts['test']} |"
+        )
+    lines.extend(["", "## Videos", ""])
+    for v in report.get("videos", []):
+        lines.append(f"### {v['video_id']} ({v.get('label_name', '')})")
+        lines.append(f"- Frames: {v.get('n_frames', '?')}  Clips: {v.get('n_clips', 0)}")
+        for c in v.get("clips", []):
+            idx = c.get("clip_index")
+            idx_s = str(idx) if idx is not None else "?"
+            lines.append(
+                f"  - clip {idx_s}: frames [{c['start_frame']}, {c['end_frame']}) -> {c['split']}"
+            )
+        lines.append("")
+
+    md_path = os.path.join(fiber_out, "split_report.md")
+    with open(md_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return json_path, md_path
 
 
 def assign_splits_deploy(videos: List[dict]) -> List[dict]:
     """
-    Mark every video for temporal splitting (all fibers, all domains).
+    Mark every video for per-video clip splitting (all fibers, all domains).
 
-    The actual temporal split happens inside ``prepare_unified_data``
-    when ``split_mode="deploy"`` — each video's frames are divided
-    70 / 15 / 15 by timeline position so clips from the same video
-    never cross splits.
+    Clip assignment is done in ``prepare_unified_data`` via ``split_strategy``
+    (``uniform_temporal`` or ``contiguous_temporal``). Clips use disjoint
+    frame ranges; the same video may appear in multiple splits.
     """
     for v in videos:
         v["split"] = "all"
@@ -470,15 +709,90 @@ def _clips_random(n_frames, clip_len, n_clips, video_meta, seed_str) -> List[dic
     return clips
 
 
+def _generate_clips_contiguous_temporal(
+    v: dict,
+    n_frames: int,
+    clip_len: int,
+    stride: int,
+    clip_sampling: str,
+    max_clips_per_video: int,
+    meta: dict,
+) -> List[dict]:
+    """First 70% train, next 15% val, last 15% test (contiguous frame blocks)."""
+    t_end = int(n_frames * DEPLOY_TRAIN_RATIO)
+    v_end = int(n_frames * (DEPLOY_TRAIN_RATIO + DEPLOY_VAL_RATIO))
+    clips = []
+    clip_idx = 0
+    for split_tag, s_start, s_end in [
+        ("train", 0, t_end), ("val", t_end, v_end), ("test", v_end, n_frames),
+    ]:
+        is_train = split_tag == "train"
+        use_random = is_train and clip_sampling == "random"
+        if use_random:
+            n_uniform = max(1, (s_end - s_start - clip_len) // stride + 1)
+            n_want = (
+                min(n_uniform, max_clips_per_video)
+                if max_clips_per_video > 0
+                else n_uniform
+            )
+            seg_clips = _clips_random(
+                s_end - s_start, clip_len, n_want, meta, v["video_id"] + split_tag,
+            )
+            for c in seg_clips:
+                c["start_frame"] += s_start
+                c["end_frame"] += s_start
+        else:
+            seg_clips = []
+            for s in range(s_start, s_end - clip_len + 1, stride):
+                seg_clips.append({**meta, "start_frame": s, "end_frame": s + clip_len})
+        if not seg_clips and (s_end - s_start) > 0:
+            seg_clips = [{**meta, "start_frame": s_start, "end_frame": s_end}]
+        if max_clips_per_video > 0 and len(seg_clips) > max_clips_per_video:
+            step = len(seg_clips) / max_clips_per_video
+            seg_clips = [seg_clips[int(j * step)] for j in range(max_clips_per_video)]
+        for c in seg_clips:
+            c["_split"] = split_tag
+            c["clip_index"] = clip_idx
+            clip_idx += 1
+        clips.extend(seg_clips)
+    return clips
+
+
+def _generate_clips_uniform_temporal(
+    v: dict,
+    n_frames: int,
+    clip_len: int,
+    stride: int,
+    max_clips_per_video: int,
+    meta: dict,
+    split_seed: int,
+) -> List[dict]:
+    """Uniform stride over the full video, then seeded shuffle into splits."""
+    clips = _clips_uniform(n_frames, clip_len, stride, meta)
+    if not clips and n_frames > 0:
+        clips = [{**meta, "start_frame": 0, "end_frame": n_frames}]
+    if max_clips_per_video > 0 and len(clips) > max_clips_per_video:
+        step = len(clips) / max_clips_per_video
+        clips = [clips[int(j * step)] for j in range(max_clips_per_video)]
+    return _assign_uniform_temporal_splits(clips, split_seed, v["video_id"])
+
+
 def _generate_clips_for_video(
     v: dict, clip_len: int, stride: int,
     clip_sampling: str, max_clips_per_video: int,
+    split_strategy: str = SPLIT_STRATEGY_UNIFORM,
+    split_seed: int = 42,
 ) -> List[dict]:
     """Generate clip metadata for a single video using its ``n_frames``.
 
-    When ``v["split"] == "all"`` (deploy mode), clips are generated for
-    train/val/test by temporal position within the video (70/15/15).
-    Returns clips with the correct ``"split"`` key set per clip.
+    When ``v["split"] == "all"`` (deploy / per-fiber mode), clips are assigned
+    to train/val/test using ``split_strategy``:
+
+    - ``uniform_temporal``: clips span the full video; indices are shuffled with
+      a fixed seed and partitioned 70/15/15.
+    - ``contiguous_temporal``: first 70% / next 15% / last 15% of timeline.
+
+    Returns clips tagged with ``_split`` (popped when buckets are filled).
     """
     n_frames = v.get("n_frames", 0)
     if n_frames <= 0:
@@ -491,35 +805,18 @@ def _generate_clips_for_video(
     }
 
     if v.get("split") == "all":
-        # Deploy mode: temporal split within this video
-        t_end = int(n_frames * DEPLOY_TRAIN_RATIO)
-        v_end = int(n_frames * (DEPLOY_TRAIN_RATIO + DEPLOY_VAL_RATIO))
-        clips = []
-        for split_tag, s_start, s_end in [
-            ("train", 0, t_end), ("val", t_end, v_end), ("test", v_end, n_frames),
-        ]:
-            is_train = split_tag == "train"
-            use_random = is_train and clip_sampling == "random"
-            if use_random:
-                n_uniform = max(1, (s_end - s_start - clip_len) // stride + 1)
-                n_want = min(n_uniform, max_clips_per_video) if max_clips_per_video > 0 else n_uniform
-                seg_clips = _clips_random(s_end - s_start, clip_len, n_want, meta, v["video_id"] + split_tag)
-                for c in seg_clips:
-                    c["start_frame"] += s_start
-                    c["end_frame"]   += s_start
-            else:
-                seg_clips = []
-                for s in range(s_start, s_end - clip_len + 1, stride):
-                    seg_clips.append({**meta, "start_frame": s, "end_frame": s + clip_len})
-            if not seg_clips and (s_end - s_start) > 0:
-                seg_clips = [{**meta, "start_frame": s_start, "end_frame": s_end}]
-            if max_clips_per_video > 0 and len(seg_clips) > max_clips_per_video:
-                step = len(seg_clips) / max_clips_per_video
-                seg_clips = [seg_clips[int(j * step)] for j in range(max_clips_per_video)]
-            for c in seg_clips:
-                c["_split"] = split_tag
-            clips.extend(seg_clips)
-        return clips
+        if split_strategy == SPLIT_STRATEGY_CONTIGUOUS:
+            return _generate_clips_contiguous_temporal(
+                v, n_frames, clip_len, stride, clip_sampling, max_clips_per_video, meta,
+            )
+        if split_strategy == SPLIT_STRATEGY_UNIFORM:
+            return _generate_clips_uniform_temporal(
+                v, n_frames, clip_len, stride, max_clips_per_video, meta, split_seed,
+            )
+        raise ValueError(
+            f"Unknown split_strategy: {split_strategy!r}  "
+            f"(choose {SPLIT_STRATEGY_UNIFORM!r} or {SPLIT_STRATEGY_CONTIGUOUS!r})"
+        )
 
     # Non-deploy: whole video belongs to one split
     is_train = v.get("split") == "train"
@@ -552,6 +849,8 @@ def prepare_unified_data(
     max_clips_per_video: int = 0,
     cache_dir: Optional[str] = None,
     load_workers: int = 0,
+    split_strategy: str = SPLIT_STRATEGY_UNIFORM,
+    split_seed: int = 42,
 ) -> Tuple[Dict[str, np.ndarray], List[dict], List[dict], List[dict]]:
     """
     Load all videos into memory and generate clip metadata per split.
@@ -580,7 +879,10 @@ def prepare_unified_data(
     valid_videos = [v for v in videos if v.get("n_frames", 0) > 0]
 
     for v in valid_videos:
-        clips = _generate_clips_for_video(v, clip_len, stride, clip_sampling, max_clips_per_video)
+        clips = _generate_clips_for_video(
+            v, clip_len, stride, clip_sampling, max_clips_per_video,
+            split_strategy=split_strategy, split_seed=split_seed,
+        )
         if v.get("split") == "all":
             for c in clips:
                 split_clips[c.pop("_split")].append(c)

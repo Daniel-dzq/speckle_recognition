@@ -16,14 +16,50 @@ import os
 import sys
 import csv
 import copy
-from typing import List, Tuple
+import json
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+try:
+    from tqdm import tqdm as _tqdm_lib
+except ImportError:
+    _tqdm_lib = None
+
+
+def log_progress_display(use_tqdm: bool) -> None:
+    """Print whether training uses epoch-only lines or tqdm batch bars."""
+    if use_tqdm:
+        print("Progress display: tqdm")
+    else:
+        print("Progress display: epoch-only")
+
+
+def resolve_use_tqdm(args) -> bool:
+    """
+    Resolve tqdm from training args. Off unless use_tqdm or --tqdm is explicitly set.
+    --no_tqdm (if present) always forces off.
+    """
+    if getattr(args, "no_tqdm", False):
+        return False
+    if getattr(args, "use_tqdm", False):
+        return True
+    return bool(getattr(args, "tqdm", False))
+
+
+def _progress_iterator(iterable, *, enable: bool, **kwargs):
+    """Wrap iterable with tqdm only when enable=True; otherwise plain iteration."""
+    if not enable:
+        return iterable
+    if _tqdm_lib is None:
+        return iterable
+    opts = dict(kwargs)
+    opts["disable"] = False
+    return _tqdm_lib(iterable, **opts)
+
 from sklearn.metrics import (
     confusion_matrix,
     classification_report,
@@ -33,6 +69,60 @@ from sklearn.metrics import (
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
+
+# ============================================================================
+#  Classification metrics helpers
+# ============================================================================
+
+def class_label_indices(class_names: List[str]) -> List[int]:
+    """Return [0, 1, ..., num_classes-1] aligned with class_names."""
+    return list(range(len(class_names)))
+
+
+def build_label_coverage(
+    y_true: list,
+    y_pred: list,
+    class_names: List[str],
+) -> Dict:
+    """Summarize which classes appear in y_true / y_pred vs the full label map."""
+    num_classes = len(class_names)
+    all_indices = class_label_indices(class_names)
+    true_set = sorted(set(int(x) for x in y_true))
+    pred_set = sorted(set(int(x) for x in y_pred))
+    missing_true = [class_names[i] for i in all_indices if i not in true_set]
+    missing_pred = [class_names[i] for i in all_indices if i not in pred_set]
+    return {
+        "num_classes": num_classes,
+        "all_label_names": list(class_names),
+        "labels_in_y_true": [class_names[i] for i in true_set],
+        "labels_in_y_pred": [class_names[i] for i in pred_set],
+        "indices_in_y_true": true_set,
+        "indices_in_y_pred": pred_set,
+        "missing_in_y_true": missing_true,
+        "missing_in_y_pred": missing_pred,
+        "n_unique_true": len(true_set),
+        "n_unique_pred": len(pred_set),
+    }
+
+
+def save_label_coverage(coverage: Dict, output_dir: str) -> str:
+    path = os.path.join(output_dir, "label_coverage.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(coverage, f, indent=2, ensure_ascii=False)
+    print(f"  Label coverage saved: {path}")
+    return path
+
+
+def print_label_coverage(coverage: Dict) -> None:
+    print("  Label coverage (test split):")
+    print(f"    All classes ({coverage['num_classes']}): {', '.join(coverage['all_label_names'])}")
+    print(f"    In y_true ({coverage['n_unique_true']}): {', '.join(coverage['labels_in_y_true']) or '(none)'}")
+    print(f"    In y_pred ({coverage['n_unique_pred']}): {', '.join(coverage['labels_in_y_pred']) or '(none)'}")
+    if coverage["missing_in_y_true"]:
+        print(f"    Missing in y_true: {', '.join(coverage['missing_in_y_true'])}")
+    if coverage["missing_in_y_pred"]:
+        print(f"    Missing in y_pred: {', '.join(coverage['missing_in_y_pred'])}")
 
 
 # ============================================================================
@@ -47,15 +137,24 @@ def train_one_epoch(
     device: torch.device,
     epoch: int,
     total_epochs: int,
+    use_tqdm: bool = False,
+    log_batch_every: int = 0,
 ) -> Tuple[float, float]:
     """Single-epoch training loop. Returns (avg_loss, accuracy%)."""
     model.train()
     total_loss = correct = total = 0
+    n_batches = len(loader)
 
-    pbar = tqdm(loader, desc=f"Epoch {epoch:03d}/{total_epochs} [train]",
-                dynamic_ncols=True, leave=False, file=sys.stderr)
+    iterator = _progress_iterator(
+        loader,
+        enable=use_tqdm,
+        desc=f"Epoch {epoch:03d}/{total_epochs} [train]",
+        dynamic_ncols=True,
+        leave=False,
+        file=sys.stderr,
+    )
 
-    for clips, labels in pbar:
+    for batch_idx, (clips, labels) in enumerate(iterator):
         clips = clips.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
@@ -70,11 +169,18 @@ def train_one_epoch(
         correct += (logits.argmax(1) == labels).sum().item()
         total += bs
 
-        pbar.set_postfix(
-            loss=f"{total_loss / total:.4f}",
-            acc=f"{100 * correct / total:.1f}%",
-            lr=f"{optimizer.param_groups[0]['lr']:.2e}",
-        )
+        if use_tqdm and hasattr(iterator, "set_postfix"):
+            iterator.set_postfix(
+                loss=f"{total_loss / total:.4f}",
+                acc=f"{100 * correct / total:.1f}%",
+                lr=f"{optimizer.param_groups[0]['lr']:.2e}",
+            )
+        if (not use_tqdm) and log_batch_every > 0 and (batch_idx + 1) % log_batch_every == 0:
+            print(
+                f"    train batch {batch_idx + 1}/{n_batches} | "
+                f"loss={total_loss / total:.4f} acc={100 * correct / total:.1f}%",
+                flush=True,
+            )
 
     return total_loss / total, 100 * correct / total
 
@@ -86,6 +192,7 @@ def evaluate(
     criterion: nn.Module,
     device: torch.device,
     desc: str = "val",
+    verbose: bool = False,
 ) -> Tuple[float, float, list, list, list]:
     """
     Evaluate model. Returns (avg_loss, accuracy%, all_preds, all_labels, all_probs).
@@ -116,14 +223,13 @@ def evaluate(
         all_labels.extend(labels.cpu().tolist())
         all_probs.extend(probs.cpu().numpy())
 
-        # Single-line overwriting progress (works in any terminal)
-        pct = (batch_idx + 1) / n_batches * 100
-        acc_now = 100 * correct / total
-        print(f"\r  [{desc}] {batch_idx+1}/{n_batches}  "
-              f"loss={total_loss/total:.4f}  acc={acc_now:.1f}%  ",
-              end="", flush=True)
-
-    print()  # newline after the overwriting line
+        if verbose:
+            acc_now = 100 * correct / total
+            print(
+                f"  [{desc}] batch {batch_idx + 1}/{n_batches} | "
+                f"loss={total_loss / total:.4f} acc={acc_now:.1f}%",
+                flush=True,
+            )
 
     avg_loss = total_loss / total if total > 0 else 0.0
     accuracy = 100 * correct / total if total > 0 else 0.0
@@ -163,13 +269,22 @@ def train_model(
           f"lr={args.lr}, device={device}")
     print(f"{'=' * 80}\n")
 
+    use_tqdm = resolve_use_tqdm(args)
+    log_batch_every = getattr(args, "log_batch_every", 0)
+    if not use_tqdm:
+        os.environ["TQDM_DISABLE"] = "1"
+    else:
+        os.environ.pop("TQDM_DISABLE", None)
+    log_progress_display(use_tqdm)
+
     for epoch in range(1, args.epochs + 1):
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, epoch, args.epochs
+            model, train_loader, criterion, optimizer, device, epoch, args.epochs,
+            use_tqdm=use_tqdm, log_batch_every=log_batch_every,
         )
 
         val_loss, val_acc, _, _, _ = evaluate(
-            model, val_loader, criterion, device, "val"
+            model, val_loader, criterion, device, "val", verbose=False,
         )
 
         lr = optimizer.param_groups[0]["lr"]
@@ -178,8 +293,9 @@ def train_model(
         marker = "*" if val_acc > best_val_acc else " "
         print(
             f" {marker} Epoch {epoch:03d}/{args.epochs} | "
-            f"train_loss={train_loss:.4f}  train_acc={train_acc:6.2f}% | "
-            f"val_loss={val_loss:.4f}  val_acc={val_acc:6.2f}% | lr={lr:.2e}"
+            f"train loss={train_loss:.4f} acc={train_acc:.1f}% | "
+            f"val loss={val_loss:.4f} acc={val_acc:.1f}% | lr={lr:.2e}",
+            flush=True,
         )
 
         history.append({
@@ -252,26 +368,39 @@ def test_model(
     criterion = nn.CrossEntropyLoss()
 
     test_loss, test_acc, all_preds, all_labels, all_probs = evaluate(
-        model, test_loader, criterion, device, "test"
+        model, test_loader, criterion, device, "test", verbose=False,
     )
 
     print(f"\n{'=' * 80}")
     print(f"  Test results:  loss = {test_loss:.4f},  accuracy = {test_acc:.2f}%")
     print(f"{'=' * 80}\n")
 
+    label_indices = class_label_indices(class_names)
+    coverage = build_label_coverage(all_labels, all_preds, class_names)
+    print_label_coverage(coverage)
+    save_label_coverage(coverage, output_dir)
+
     # ── Classification report (terminal) ─────────────────────────────────
     report = classification_report(
-        all_labels, all_preds,
+        all_labels,
+        all_preds,
+        labels=label_indices,
         target_names=class_names,
         digits=4,
         zero_division=0,
     )
     print(report)
 
+    report_path = os.path.join(output_dir, "classification_report.txt")
+    with open(report_path, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"  Classification report saved: {report_path}")
+
     # ── 1. Per-class precision / recall / F1 (CSV) ───────────────────────
     precision, recall, f1, support = precision_recall_fscore_support(
-        all_labels, all_preds,
-        labels=list(range(len(class_names))),
+        all_labels,
+        all_preds,
+        labels=label_indices,
         zero_division=0,
     )
     metrics_path = os.path.join(output_dir, "per_class_metrics.csv")
@@ -313,7 +442,7 @@ def test_model(
     # ── 3. Confusion matrix (PNG) ───────────────────────────────────────
     _save_confusion_matrix(all_labels, all_preds, class_names, output_dir)
 
-    return test_acc
+    return test_acc, coverage
 
 
 # ============================================================================
@@ -326,7 +455,8 @@ def _save_confusion_matrix(
     class_names: List[str],
     output_dir: str,
 ) -> None:
-    cm = confusion_matrix(labels, preds, labels=list(range(len(class_names))))
+    label_indices = class_label_indices(class_names)
+    cm = confusion_matrix(labels, preds, labels=label_indices)
     n = len(class_names)
 
     fig_size = max(8, n * 0.5)

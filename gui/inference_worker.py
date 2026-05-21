@@ -15,6 +15,7 @@ Features:
 
 import os
 import sys
+import json
 import queue
 import collections
 import threading
@@ -92,14 +93,41 @@ class InferenceWorker(QThread):
 
     # ── Model loading ──────────────────────────────────────────────────
 
+    @staticmethod
+    def _load_label_map_from_dir(model_dir: str) -> list:
+        path = os.path.join(model_dir, "label_map.json")
+        if not os.path.isfile(path):
+            return []
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            if data.get("labels"):
+                return list(data["labels"])
+            idx_map = data.get("index_to_label", {})
+            return [idx_map[str(i)] for i in range(len(idx_map))]
+        except (json.JSONDecodeError, OSError, KeyError):
+            return []
+
     def load_model(self, checkpoint_path: str) -> bool:
         """Load model from checkpoint. Thread-safe (call from main thread before start)."""
         try:
             ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
             model_type = ckpt.get("model_type", "cnn_pool")
-            num_classes = ckpt.get("num_classes", 26)
-            class_names = ckpt.get("class_names", [chr(65 + i) for i in range(26)])
+            num_classes = ckpt.get("num_classes")
+            class_names = ckpt.get("class_names")
+            if not class_names and ckpt.get("index_to_label"):
+                idx_map = ckpt["index_to_label"]
+                class_names = [idx_map[str(i)] for i in range(len(idx_map))]
+            if not class_names:
+                class_names = self._load_label_map_from_dir(
+                    os.path.dirname(checkpoint_path)
+                )
+            if num_classes is None:
+                num_classes = len(class_names) if class_names else 26
+            if not class_names:
+                num_classes = ckpt.get("num_classes", 26)
+                class_names = [chr(65 + i) for i in range(num_classes)]
             clip_len = ckpt.get("clip_len", 16)
             img_size = ckpt.get("img_size", 224)
             fiber_name = ckpt.get("fiber_name", "unknown")

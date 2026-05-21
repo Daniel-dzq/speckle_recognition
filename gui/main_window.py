@@ -12,6 +12,7 @@ Improved version:
 import os
 import sys
 import glob
+import json
 import time
 import threading
 import platform
@@ -56,6 +57,13 @@ from gui.challenge_widgets  import (
     ChallengePreviewWidget,
     RecognitionResultWidget,
     labels_match,
+    normalize_label,
+)
+from gui.challenge_manifest import (
+    challenge_inputs_dir,
+    load_challenge_manifest,
+    manifest_path,
+    resolve_manifest_entries,
 )
 from gui.demo_presentation  import add_card_title, demo_font, style_control_section
 from gui.cute_style         import PREMIUM_STYLE
@@ -200,7 +208,9 @@ QScrollArea {
 """
 
 
-FIBER_MODELS_DIR = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
+FIBER_MODELS_DIR = os.path.join(ROOT, "models", "final_15fibers")
+FIBER_MODELS_DIR_LEGACY = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
+LABEL_MAP_PATH = os.path.join(FIBER_MODELS_DIR, "label_map.json")
 LOW_CONFIDENCE_THRESHOLD = 0.40
 
 DEFAULT_TEXT_CHALLENGES = [
@@ -208,7 +218,9 @@ DEFAULT_TEXT_CHALLENGES = [
     "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
     "1", "2", "3", "boy_avatar", "girl_avatar",
 ]
+CHALLENGE_INPUTS_DIR = os.path.join(ROOT, "challenge_inputs")
 CHALLENGE_IMAGE_DIRS = [
+    CHALLENGE_INPUTS_DIR,
     os.path.join(ROOT, "letter_images"),
     os.path.join(ROOT, "challenge_images"),
 ]
@@ -220,16 +232,42 @@ def _env_manual_screenshot_mode() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
-def discover_fiber_models(model_dir: str = FIBER_MODELS_DIR):
+def discover_fiber_models(model_dir: str = None):
     """Return {fiber_name: checkpoint_path} for all Fiber*.pth files."""
     result = {}
-    if not os.path.isdir(model_dir):
-        return result
-    for f in sorted(os.listdir(model_dir)):
-        if f.endswith(".pth"):
-            name = os.path.splitext(f)[0]
-            result[name] = os.path.join(model_dir, f)
+    search_dirs = []
+    if model_dir:
+        search_dirs.append(model_dir)
+    else:
+        search_dirs.extend([FIBER_MODELS_DIR, FIBER_MODELS_DIR_LEGACY])
+    for directory in search_dirs:
+        if not os.path.isdir(directory):
+            continue
+        for f in sorted(os.listdir(directory)):
+            if f.endswith(".pth") and not f.endswith(".pth.bak"):
+                name = os.path.splitext(f)[0]
+                if name.startswith("Fiber") and name not in result:
+                    result[name] = os.path.join(directory, f)
     return result
+
+
+def load_label_map_class_names() -> list[str]:
+    """Load challenge labels from models/final_15fibers/label_map.json if present."""
+    for path in (LABEL_MAP_PATH, os.path.join(FIBER_MODELS_DIR_LEGACY, "label_map.json")):
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+            labels = data.get("labels")
+            if labels:
+                return list(labels)
+            idx_map = data.get("index_to_label", {})
+            if idx_map:
+                return [idx_map[str(i)] for i in range(len(idx_map))]
+        except (json.JSONDecodeError, OSError, KeyError):
+            pass
+    return []
 
 
 def discover_fibers(video_dir: str):
@@ -366,6 +404,8 @@ class MainWindow(QMainWindow):
         self._challenge_image_path: Optional[str] = None
         self._challenge_cycle: list[str] = []
         self._challenge_cycle_index = 0
+        self._ppt_challenge_entries: list[dict] = []
+        self._challenge_image_by_label: dict[str, str] = {}
 
         self._top_splitter = None
         self._left_scroll = None
@@ -379,6 +419,8 @@ class MainWindow(QMainWindow):
         self._connect_signals()
         self._infer_worker.start()
         self._challenge_cycle = self._discover_challenge_cycle()
+        if not self._try_load_challenge_manifest():
+            pass
         self._refresh_fiber_list()
         self._refresh_screen_list()
         self._recognition_result.clear_result()
@@ -459,9 +501,23 @@ class MainWindow(QMainWindow):
         return f
 
     def _discover_challenge_cycle(self) -> list[str]:
-        """Build ordered challenge labels for Prev/Next (text presets + image stems)."""
+        """Build ordered challenge labels for Prev/Next (manifest, label map, images)."""
         seen: set[str] = set()
         out: list[str] = []
+
+        manifest = load_challenge_manifest()
+        if manifest:
+            for entry in resolve_manifest_entries(manifest):
+                key = entry["label"].strip()
+                if key and key not in seen:
+                    seen.add(key)
+                    out.append(key)
+
+        for label in load_label_map_class_names():
+            key = label.strip()
+            if key and key not in seen:
+                seen.add(key)
+                out.append(key)
         for label in DEFAULT_TEXT_CHALLENGES:
             key = label.strip()
             if key and key not in seen:
@@ -472,6 +528,8 @@ class MainWindow(QMainWindow):
                 continue
             for fname in sorted(os.listdir(base)):
                 low = fname.lower()
+                if low == "manifest.json":
+                    continue
                 if not low.endswith((".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff")):
                     continue
                 stem = os.path.splitext(fname)[0]
@@ -479,6 +537,50 @@ class MainWindow(QMainWindow):
                     seen.add(stem)
                     out.append(stem)
         return out or ["A"]
+
+    def _try_load_challenge_manifest(self) -> bool:
+        """Load challenge_inputs/manifest.json and show the first challenge."""
+        manifest = load_challenge_manifest()
+        if not manifest:
+            return False
+        entries = resolve_manifest_entries(manifest)
+        if not entries:
+            self._log(f"[Challenge] Manifest empty or missing images: {manifest_path()}")
+            return False
+
+        self._ppt_challenge_entries = entries
+        self._challenge_image_by_label = {e["label"]: e["image"] for e in entries}
+        self._challenge_cycle = [e["label"] for e in entries]
+        self._challenge_cycle_index = 0
+
+        first = entries[0]
+        self._apply_challenge_label(
+            first["label"],
+            source="image",
+            image_path=first["image"],
+            send_slm=False,
+        )
+        self._log(
+            f"[Challenge] Loaded PPT challenge set ({len(entries)} items) from "
+            f"{challenge_inputs_dir()}"
+        )
+        return True
+
+    def _reload_challenge_manifest(self) -> None:
+        if self._try_load_challenge_manifest():
+            QMessageBox.information(
+                self,
+                "Challenge set",
+                f"Loaded {len(self._ppt_challenge_entries)} challenges from\n"
+                f"{manifest_path()}",
+            )
+        else:
+            QMessageBox.warning(
+                self,
+                "Challenge set",
+                f"No manifest found at:\n{manifest_path()}\n\n"
+                "Run: python scripts/export_ppt_challenges.py --input input.pptx",
+            )
 
     def _build_left_panel(self):
         container = QWidget()
@@ -581,7 +683,7 @@ class MainWindow(QMainWindow):
         ch.addWidget(self._btn_prev, 2, 0, 1, 2)
         ch.addWidget(self._btn_next, 2, 2)
 
-        self._btn_load_img = QPushButton("Load Image")
+        self._btn_load_img = QPushButton("Load Image to SLM")
         self._btn_load_img.setMinimumHeight(38)
         self._btn_load_img.setToolTip(
             "Load a PNG/JPG/BMP for PPT exports, avatars, or custom patterns."
@@ -589,19 +691,27 @@ class MainWindow(QMainWindow):
         self._btn_load_img.clicked.connect(self._load_image_to_slm)
         ch.addWidget(self._btn_load_img, 3, 0, 1, 3)
 
+        self._btn_load_challenge_set = QPushButton("Load Challenge Set")
+        self._btn_load_challenge_set.setMinimumHeight(38)
+        self._btn_load_challenge_set.setToolTip(
+            "Reload challenge_inputs/manifest.json (exported from input.pptx)."
+        )
+        self._btn_load_challenge_set.clicked.connect(self._reload_challenge_manifest)
+        ch.addWidget(self._btn_load_challenge_set, 4, 0, 1, 3)
+
         self._spin_font = QSpinBox()
         self._spin_font.setRange(50, 800)
         self._spin_font.setValue(400)
         self._spin_font.setMinimumHeight(38)
         self._spin_font.setSingleStep(20)
         self._spin_font.valueChanged.connect(self._on_font_size_changed)
-        ch.addWidget(QLabel("Font size:"), 4, 0)
-        ch.addWidget(self._spin_font, 4, 1)
+        ch.addWidget(QLabel("Font size:"), 5, 0)
+        ch.addWidget(self._spin_font, 5, 1)
 
         self._chk_slm_stretch = QCheckBox("Stretch to fill")
         self._chk_slm_stretch.setChecked(True)
         self._chk_slm_stretch.toggled.connect(self._on_slm_stretch_toggled)
-        ch.addWidget(self._chk_slm_stretch, 4, 2)
+        ch.addWidget(self._chk_slm_stretch, 5, 2)
         ch_outer.addLayout(ch)
         layout.addWidget(ch_box)
 
@@ -1211,6 +1321,8 @@ class MainWindow(QMainWindow):
             f"[SLM] Send pipeline: challenge={self.current_challenge_label!r}, "
             f"source={self._challenge_source}, screen_index={idx}, screen_name={name!r}"
         )
+        self._recognition_result.set_waiting(self.current_challenge_label)
+        self._robot_panel.set_challenge_label(self.current_challenge_label)
         self._push_challenge_to_slm()
         self._log(f"Challenge sent to SLM: {self.current_challenge_label}")
 
@@ -1249,6 +1361,16 @@ class MainWindow(QMainWindow):
     def _resolve_challenge_image_path(self, label: str) -> Optional[str]:
         from gui.slm_window import _find_challenge_png
 
+        key = (label or "").strip()
+        if key in self._challenge_image_by_label:
+            path = self._challenge_image_by_label[key]
+            if os.path.isfile(path):
+                return path
+        for entry in self._ppt_challenge_entries:
+            if normalize_label(entry.get("label", "")) == normalize_label(key):
+                path = entry.get("image", "")
+                if path and os.path.isfile(path):
+                    return path
         return _find_challenge_png(label)
 
     def _load_image_to_slm(self):

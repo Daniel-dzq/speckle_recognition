@@ -221,8 +221,17 @@ def save_classification_report(
     labels: list, preds: list, class_names: list, output_dir: str
 ):
     from sklearn.metrics import classification_report
+    from train_eval import class_label_indices, build_label_coverage, print_label_coverage, save_label_coverage
+
+    label_indices = class_label_indices(class_names)
+    coverage = build_label_coverage(labels, preds, class_names)
+    print_label_coverage(coverage)
+    save_label_coverage(coverage, output_dir)
+
     report = classification_report(
-        labels, preds,
+        labels,
+        preds,
+        labels=label_indices,
         target_names=class_names,
         digits=4,
         zero_division=0,
@@ -321,7 +330,7 @@ def train_single_fiber(args):
     # ── 5. Test ──────────────────────────────────────────────────────────
     print("\n[5/5] Evaluating on test set ...")
     if len(test_clips) > 0:
-        test_acc = test_model(model, test_loader, test_clips, class_names, device, output_dir)
+        test_acc, _ = test_model(model, test_loader, test_clips, class_names, device, output_dir)
     else:
         test_acc = 0.0
         print("  [WARNING] Test set is empty, skipping test evaluation.")

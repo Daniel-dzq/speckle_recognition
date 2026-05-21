@@ -1,0 +1,64 @@
+{
+  "source_pptx": "/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/input.pptx",
+  "export_method": "pptx",
+  "width": 1920,
+  "height": 1080,
+  "challenges": [
+    {
+      "label": "A",
+      "image": "challenge_inputs/A.png",
+      "source_slide": 1,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "B",
+      "image": "challenge_inputs/B.png",
+      "source_slide": 2,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "C",
+      "image": "challenge_inputs/C.png",
+      "source_slide": 3,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "1",
+      "image": "challenge_inputs/1.png",
+      "source_slide": 4,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "2",
+      "image": "challenge_inputs/2.png",
+      "source_slide": 5,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "3",
+      "image": "challenge_inputs/3.png",
+      "source_slide": 6,
+      "label_method": "text",
+      "export_method": "pptx"
+    },
+    {
+      "label": "boy",
+      "image": "challenge_inputs/boy.png",
+      "source_slide": 7,
+      "label_method": "avatar_fallback",
+      "export_method": "pptx"
+    },
+    {
+      "label": "girl",
+      "image": "challenge_inputs/girl.png",
+      "source_slide": 8,
+      "label_method": "avatar_fallback",
+      "export_method": "pptx"
+    }
+  ]
+}

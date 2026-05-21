@@ -59,7 +59,13 @@ from unified_dataset import (
     DEFAULT_TRAIN_FIBERS, DEFAULT_VAL_FIBERS, DEFAULT_TEST_FIBERS,
 )
 from models import get_model
-from train_eval import train_one_epoch, evaluate, _save_confusion_matrix
+from train_eval import (
+    train_one_epoch,
+    evaluate,
+    log_progress_display,
+    resolve_use_tqdm,
+    _save_confusion_matrix,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -123,6 +129,10 @@ def parse_args():
     p.add_argument("--patience",   type=int,   default=12)
     p.add_argument("--num_workers", type=int,  default=0)
     p.add_argument("--seed",       type=int,   default=42)
+    p.add_argument("--tqdm", action="store_true",
+                   help="Enable tqdm progress bars (off by default)")
+    p.add_argument("--log_batch_every", type=int, default=0,
+                   help="Print train batch progress every N batches when tqdm is off")
 
     return p.parse_args()
 
@@ -181,21 +191,33 @@ def train_unified_model(model, train_loader, val_loader, args, device, ckpt_path
           f"lr={args.lr}  device={device}")
     print(f"{'='*80}\n")
 
+    use_tqdm = resolve_use_tqdm(args)
+    log_batch_every = getattr(args, "log_batch_every", 0)
+    if not use_tqdm:
+        os.environ["TQDM_DISABLE"] = "1"
+    else:
+        os.environ.pop("TQDM_DISABLE", None)
+    log_progress_display(use_tqdm)
+
     for epoch in range(1, args.epochs + 1):
         train_loss, train_acc = train_one_epoch(
             model, train_loader, criterion, optimizer, device, epoch, args.epochs,
+            use_tqdm=use_tqdm, log_batch_every=log_batch_every,
         )
         val_loss, val_acc, _, _, _ = evaluate(
-            model, val_loader, criterion, device, "val",
+            model, val_loader, criterion, device, "val", verbose=False,
         )
 
         lr = optimizer.param_groups[0]["lr"]
         scheduler.step()
 
         marker = "*" if val_acc > best_val_acc else " "
-        print(f" {marker} Epoch {epoch:03d}/{args.epochs} | "
-              f"train_loss={train_loss:.4f}  train_acc={train_acc:6.2f}% | "
-              f"val_loss={val_loss:.4f}  val_acc={val_acc:6.2f}% | lr={lr:.2e}")
+        print(
+            f" {marker} Epoch {epoch:03d}/{args.epochs} | "
+            f"train loss={train_loss:.4f} acc={train_acc:.1f}% | "
+            f"val loss={val_loss:.4f} acc={val_acc:.1f}% | lr={lr:.2e}",
+            flush=True,
+        )
 
         history.append({
             "epoch": epoch,
@@ -286,8 +308,19 @@ def evaluate_unified(model, test_loader, test_clips, device, output_dir, class_n
     save_accuracy_table(table, domains, fibers, output_dir)
 
     # ── Classification report ───────────────────────────────────────────
+    from train_eval import class_label_indices, build_label_coverage, print_label_coverage, save_label_coverage
+    label_indices = class_label_indices(class_names)
+    coverage = build_label_coverage(all_labels, all_preds, class_names)
+    print_label_coverage(coverage)
+    save_label_coverage(coverage, output_dir)
+
     report = classification_report(
-        all_labels, all_preds, target_names=class_names, digits=4, zero_division=0,
+        all_labels,
+        all_preds,
+        labels=label_indices,
+        target_names=class_names,
+        digits=4,
+        zero_division=0,
     )
     rpt_path = os.path.join(output_dir, "classification_report.txt")
     with open(rpt_path, "w", encoding="utf-8") as f:
@@ -435,6 +468,7 @@ def main():
     print(f"  Index workers   : {args.index_workers}")
     print(f"  Load workers    : {args.load_workers}")
     print(f"  Image size      : {args.img_size}")
+    log_progress_display(resolve_use_tqdm(args))
     print()
 
     # ── 1. Discover & index ─────────────────────────────────────────────

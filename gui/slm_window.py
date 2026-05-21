@@ -46,6 +46,7 @@ def _letter_image_search_roots() -> list[str]:
     if env:
         roots.append(os.path.abspath(os.path.expanduser(env)))
     roots.append(os.path.join(_ROOT_DIR, "letter_images"))
+    roots.append(os.path.join(_ROOT_DIR, "challenge_inputs"))
     seen: set[str] = set()
     out: list[str] = []
     for r in roots:

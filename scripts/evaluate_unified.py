@@ -234,8 +234,19 @@ def main():
     save_accuracy_table(table, domains, fibers, output_dir)
 
     # ── Sklearn report ──────────────────────────────────────────────────
+    from train_eval import class_label_indices, build_label_coverage, print_label_coverage, save_label_coverage
+    label_indices = class_label_indices(class_names)
+    coverage = build_label_coverage(all_labels, all_preds, class_names)
+    print_label_coverage(coverage)
+    save_label_coverage(coverage, output_dir)
+
     report = classification_report(
-        all_labels, all_preds, target_names=class_names, digits=4, zero_division=0,
+        all_labels,
+        all_preds,
+        labels=label_indices,
+        target_names=class_names,
+        digits=4,
+        zero_division=0,
     )
     rpt_path = os.path.join(output_dir, "classification_report.txt")
     with open(rpt_path, "w", encoding="utf-8") as f:

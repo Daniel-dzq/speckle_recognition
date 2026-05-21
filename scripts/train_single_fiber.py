@@ -190,7 +190,7 @@ def main():
     #  5. Test
     # ══════════════════════════════════════════════════════════════════════
     if len(test_clips) > 0:
-        test_acc = test_model(
+        test_acc, _ = test_model(
             model, test_loader, test_clips, class_names, device, args.output_dir
         )
     else:
