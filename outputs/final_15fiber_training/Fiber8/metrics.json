@@ -1,0 +1,103 @@
+{
+  "fiber": "Fiber8",
+  "status": "ok",
+  "num_classes": 8,
+  "class_names": [
+    "1",
+    "2",
+    "3",
+    "a",
+    "b",
+    "c",
+    "boy",
+    "girl"
+  ],
+  "videos": 16,
+  "clips": {
+    "train": 176,
+    "val": 32,
+    "test": 64
+  },
+  "train_accuracy": 100.0,
+  "best_val_accuracy": 100.0,
+  "test_accuracy": 96.875,
+  "per_class_test_accuracy": {
+    "1": 100.0,
+    "2": 87.5,
+    "3": 100.0,
+    "a": 100.0,
+    "b": 100.0,
+    "boy": 100.0,
+    "c": 87.5,
+    "girl": 100.0
+  },
+  "label_coverage": {
+    "num_classes": 8,
+    "all_label_names": [
+      "1",
+      "2",
+      "3",
+      "a",
+      "b",
+      "c",
+      "boy",
+      "girl"
+    ],
+    "labels_in_y_true": [
+      "1",
+      "2",
+      "3",
+      "a",
+      "b",
+      "c",
+      "boy",
+      "girl"
+    ],
+    "labels_in_y_pred": [
+      "1",
+      "2",
+      "3",
+      "a",
+      "b",
+      "c",
+      "boy",
+      "girl"
+    ],
+    "indices_in_y_true": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "indices_in_y_pred": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "missing_in_y_true": [],
+    "missing_in_y_pred": [],
+    "n_unique_true": 8,
+    "n_unique_pred": 8
+  },
+  "missing_domains": [],
+  "split_strategy": {
+    "strategy": "uniform_temporal",
+    "seed": 42,
+    "train_ratio": 0.7,
+    "val_ratio": 0.15,
+    "test_ratio": 0.15,
+    "video_id_overlap_across_splits": true,
+    "clip_frame_leakage": "none (disjoint clip frame ranges per video)"
+  },
+  "model_path": "models/final_15fibers/Fiber8.pth",
+  "eval_only": false
+}

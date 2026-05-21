@@ -1,6 +1,0 @@
-panel,series,value,n_images,verification
-a,raw_green_CV_pct,39.16047400774813,75,computed
-a,gr_ratio_CV_pct_bar,4.3,,manuscript_summary
-a,gr_ratio_CV_diagnostic_pool_pct,85.79621596844676,75,diagnostic_only
-b,ncc_raw,0.72,,summary
-b,ncc_gr_ratio,0.9216,,summary

@@ -76,8 +76,8 @@ DEFAULT_MODELS_DIR = os.path.join(ROOT, "models", "final_15fibers")
 
 def parse_args():
     p = argparse.ArgumentParser(description="Train final 15-fiber PUF recognition models")
-    p.add_argument("--data_root", type=str, default="recognition_dataset",
-                   help="Dataset root (e.g. recognition_dataset or '(5.20)')")
+    p.add_argument("--data_root", type=str, default="data/recognition_dataset",
+                   help="Dataset root (default: data/recognition_dataset)")
     p.add_argument("--domains", nargs="+", default=DEFAULT_DOMAINS)
     p.add_argument("--fibers", nargs="+", default=DEFAULT_FIBERS)
     p.add_argument("--output_dir", type=str, default=DEFAULT_OUTPUT)

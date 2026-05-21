@@ -1,0 +1,85 @@
+{
+  "experiment": "length_optimization",
+  "artifacts": [
+    {
+      "name": "per_fiber_metrics",
+      "kind": "csv",
+      "path": "experiments/length_optimization/outputs/length_optimization_green/tables/per_fiber_metrics.csv",
+      "description": "Per-fiber entropy, intra distance, and loss"
+    },
+    {
+      "name": "per_length_summary",
+      "kind": "csv",
+      "path": "experiments/length_optimization/outputs/length_optimization_green/tables/per_length_summary.csv",
+      "description": "Per-length-group aggregated metrics"
+    },
+    {
+      "name": "optimal_length",
+      "kind": "json",
+      "path": "experiments/length_optimization/outputs/length_optimization_green/optimal_length.json",
+      "description": "Optimal length recommendation"
+    },
+    {
+      "name": "loss_vs_length",
+      "paths": [
+        "experiments/length_optimization/outputs/length_optimization_green/figures/loss_vs_length.png",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/loss_vs_length.pdf",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/loss_vs_length.svg"
+      ],
+      "source_csv": null,
+      "caption": "(a) Red/green transmission loss vs total fiber length (cm)"
+    },
+    {
+      "name": "separability_vs_length",
+      "paths": [
+        "experiments/length_optimization/outputs/length_optimization_green/figures/separability_vs_length.png",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/separability_vs_length.pdf",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/separability_vs_length.svg"
+      ],
+      "source_csv": null,
+      "caption": "(b) Intra/inter-class distance and inter/intra distance ratio per total length"
+    },
+    {
+      "name": "entropy_vs_length",
+      "paths": [
+        "experiments/length_optimization/outputs/length_optimization_green/figures/entropy_vs_length.png",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/entropy_vs_length.pdf",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/entropy_vs_length.svg"
+      ],
+      "source_csv": null,
+      "caption": "(c) Mean pixel entropy vs total fiber length (cm)"
+    },
+    {
+      "name": "speckle_montage",
+      "paths": [
+        "experiments/length_optimization/outputs/length_optimization_green/figures/speckle_montage.png",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/speckle_montage.pdf",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/speckle_montage.svg"
+      ],
+      "source_csv": null,
+      "caption": "(d) Representative speckle images per length group"
+    },
+    {
+      "name": "figure2_combined",
+      "paths": [
+        "experiments/length_optimization/outputs/length_optimization_green/figures/figure2_combined.png",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/figure2_combined.pdf",
+        "experiments/length_optimization/outputs/length_optimization_green/figures/figure2_combined.svg"
+      ],
+      "source_csv": null,
+      "caption": "Combined (a)(b)(c) \u2014 manuscript Figure 4 style, Section 3.2"
+    },
+    {
+      "name": "report",
+      "kind": "markdown",
+      "path": "experiments/length_optimization/outputs/length_optimization_green/report.md",
+      "description": ""
+    },
+    {
+      "name": "manifest",
+      "kind": "manifest",
+      "path": "experiments/length_optimization/outputs/length_optimization_green/manifest.json",
+      "description": "Run manifest + provenance"
+    }
+  ]
+}

@@ -1,133 +1,39 @@
-# ---------------------------------------------------------------------------
-# Python
-# ---------------------------------------------------------------------------
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg-info/
-.eggs/
-dist/
-build/
-
-# ---------------------------------------------------------------------------
-# Virtual environments
-# ---------------------------------------------------------------------------
-venv/
-.venv/
-env/
-
-# ---------------------------------------------------------------------------
-# Model weights (large, not committed — regenerate with scripts/train_*.py)
-# ---------------------------------------------------------------------------
-*.pth
-*.pt
-*.ckpt
-*.joblib
-*.pkl
-
-# ---------------------------------------------------------------------------
-# Generated outputs
-# ---------------------------------------------------------------------------
-output/
-results/
-checkpoints/
-# figures/ granular rules in figures/.gitignore (paper outputs + patent renders tracked)
-# Stray top-level evaluation artefacts (older scripts used to drop these here)
-/confusion_matrix.png
-/training_log.csv
-/per_class_metrics.csv
-/test_predictions.csv
-
-# ---------------------------------------------------------------------------
-# Caches
-# ---------------------------------------------------------------------------
-.cache/
-.analysis_cache/
-analysis_cache/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 *.pyc
-
-# ---------------------------------------------------------------------------
-# Raw acquisition data (too large to commit)
-# ---------------------------------------------------------------------------
-video_capture/
-videocapture/
-videos/
-screenshots/
-data/
-*.mp4
-*.avi
-*.mov
-
-# ---------------------------------------------------------------------------
-# Local experiment snapshots (copy-only archives; never commit)
-# ---------------------------------------------------------------------------
-experiment_archive/
-
-# ---------------------------------------------------------------------------
-# Unified paper bundle (PNG/SVG/PDF/CSV copies — regenerate locally)
-# ---------------------------------------------------------------------------
-paper_assets/
-
-# ---------------------------------------------------------------------------
-# Scratch exports
-# ---------------------------------------------------------------------------
-local_exports/
-tmp/
-temp/
-
-# ---------------------------------------------------------------------------
-# Paper drafts, Word/LibreOffice binaries, local uploads (do not commit)
-# ---------------------------------------------------------------------------
-*.docx
-*.doc
-*.pptx
-!figures/paper/Fig2_setup/*.pptx
-uploads/
-
-# ---------------------------------------------------------------------------
-# Paper drafts & binary archives (live under archive/)
-# ---------------------------------------------------------------------------
-archive/*.docx
-archive/*.pptx
-archive/*.zip
-
-# ---------------------------------------------------------------------------
-# Local experiment trees, caches, and one-off publication exports
-# ---------------------------------------------------------------------------
-.analysis_cache/
-LengthOptimize/
-disturbance_sensitivity/
-fiber_loss/
-figures_publication/
-long_term_stability/
-power_common_mode/
-
-# Locale-specific or legal-document tooling (keep local only; not part of OSS tree)
-scripts/generate_soft_ware_manual_revision.py
-scripts/generate_softcopyright_figures_pptx.py
-scripts/install_user_manual_screenshots.py
-scripts/regenerate_figures_and_report.py
-
-# ---------------------------------------------------------------------------
-# Jupyter
-# ---------------------------------------------------------------------------
-.ipynb_checkpoints/
-
-# ---------------------------------------------------------------------------
-# IDE
-# ---------------------------------------------------------------------------
-.idea/
-.vscode/
-*.suo
-*.user
-
-# ---------------------------------------------------------------------------
-# OS
-# ---------------------------------------------------------------------------
 .DS_Store
-Thumbs.db
-desktop.ini
+.cache/
+
+experiments/**/outputs/.analysis_cache/
+experiments/**/outputs/**/cache/
+outputs/**/.cache/
+
+# Recognition training data and model weights (local only)
+data/recognition_dataset/
+models/final_15fibers/*.pth
+*.pth
+
+# Video and large media
+*.avi
+*.mp4
+*.mov
+*.zip
+*.tar
+*.blend
+
+*.log
+.venv/
+venv/
+
+# Local camera SDK binaries (install vendor SDK locally for hardware capture)
+gui/win_sdk/
+gui/libmvsdk.dylib
+
+# Local physical experiment raw image data (summaries under outputs/ are tracked)
+experiments/length_optimization/data/
+experiments/long_term_stability/data/
+experiments/disturbance_sensitivity/data/
+
+# Large intermediate experiment figures (final paper figures are under figures/paper/)
+experiments/length_optimization/outputs/length_optimization_green/figures/
+experiments/long_term_stability/outputs/figures/
+experiments/disturbance_sensitivity/outputs/figures/

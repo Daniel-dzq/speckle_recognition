@@ -1,0 +1,189 @@
+{
+  "disturbance_sensitivity": {
+    "n_captures": 75,
+    "pooled_intra_l2": 12.994946479797363,
+    "pooled_inter_l2": 23.551218032836914,
+    "pooled_inter_intra_ratio": 1.8123366702164487,
+    "within_fiber_mean_ncc": {
+      "Fiber1": 0.627417802810669,
+      "Fiber2": 0.887111485004425,
+      "Fiber3": 0.9623459577560425,
+      "Fiber4": 0.755402684211731,
+      "Fiber5": 0.6453312635421753,
+      "Fiber6": 0.6077716946601868,
+      "Fiber7": 0.7797272801399231,
+      "Fiber8": 0.3417162001132965,
+      "Fiber9": 0.6990970373153687,
+      "Fiber10": 0.6761943101882935,
+      "Fiber11": 0.4125613570213318,
+      "Fiber12": 0.13697922229766846,
+      "Fiber13": 0.4219718873500824,
+      "Fiber14": 0.6822100877761841,
+      "Fiber15": 0.5613152980804443
+    }
+  },
+  "long_term_stability": {
+    "n_captures": 195,
+    "per_fiber": [
+      {
+        "fiber": "Fiber1",
+        "consecutive_ncc": 0.9970951279004415,
+        "vs_first_ncc": 0.9733920842409134,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber2",
+        "consecutive_ncc": 0.9914773603280386,
+        "vs_first_ncc": 0.9210260113080343,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber3",
+        "consecutive_ncc": 0.9879989922046661,
+        "vs_first_ncc": 0.8624093582232794,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber4",
+        "consecutive_ncc": 0.9852568556865057,
+        "vs_first_ncc": 0.9132873763640722,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber5",
+        "consecutive_ncc": 0.9957292824983597,
+        "vs_first_ncc": 0.9523907651503881,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber6",
+        "consecutive_ncc": 0.9568978001674017,
+        "vs_first_ncc": 0.8858688275019327,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber7",
+        "consecutive_ncc": 0.897725835442543,
+        "vs_first_ncc": 0.8238268742958704,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber8",
+        "consecutive_ncc": 0.9816920459270477,
+        "vs_first_ncc": 0.7398603061834971,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber9",
+        "consecutive_ncc": 0.9623391181230545,
+        "vs_first_ncc": 0.7223298897345861,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber10",
+        "consecutive_ncc": 0.8013250033060709,
+        "vs_first_ncc": 0.6597770601511002,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber11",
+        "consecutive_ncc": 0.9216324687004089,
+        "vs_first_ncc": 0.6792933990557989,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber12",
+        "consecutive_ncc": 0.8644357075293859,
+        "vs_first_ncc": 0.7182901750008265,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber13",
+        "consecutive_ncc": 0.842376634478569,
+        "vs_first_ncc": 0.6422305951515833,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber14",
+        "consecutive_ncc": 0.8550937076409658,
+        "vs_first_ncc": 0.7394983172416687,
+        "n_samples": 13
+      },
+      {
+        "fiber": "Fiber15",
+        "consecutive_ncc": 0.8821981896956762,
+        "vs_first_ncc": 0.7881505042314529,
+        "n_samples": 13
+      }
+    ]
+  },
+  "power_common_mode": {
+    "n_captures": 600,
+    "per_power_setting": [
+      {
+        "folder": "P10",
+        "power_index": 10,
+        "inter_intra_ratio": 1.5741347809978763,
+        "intra_l2": 14.180716514587402,
+        "inter_l2": 22.322359085083008,
+        "n_images": 80
+      },
+      {
+        "folder": "P30",
+        "power_index": 30,
+        "inter_intra_ratio": 2.402596969144595,
+        "intra_l2": 8.172098159790039,
+        "inter_l2": 19.634258270263672,
+        "n_images": 75
+      },
+      {
+        "folder": "P50",
+        "power_index": 50,
+        "inter_intra_ratio": 3.282490699232809,
+        "intra_l2": 6.215674877166748,
+        "inter_l2": 20.402894973754883,
+        "n_images": 70
+      },
+      {
+        "folder": "P70",
+        "power_index": 70,
+        "inter_intra_ratio": 3.451189224222682,
+        "intra_l2": 6.302947521209717,
+        "inter_l2": 21.75266456604004,
+        "n_images": 80
+      },
+      {
+        "folder": "P90",
+        "power_index": 90,
+        "inter_intra_ratio": 5.101962797111383,
+        "intra_l2": 4.654440879821777,
+        "inter_l2": 23.746784210205078,
+        "n_images": 75
+      },
+      {
+        "folder": "P110",
+        "power_index": 110,
+        "inter_intra_ratio": 6.483506951148269,
+        "intra_l2": 3.828129768371582,
+        "inter_l2": 24.819705963134766,
+        "n_images": 70
+      },
+      {
+        "folder": "P130",
+        "power_index": 130,
+        "inter_intra_ratio": 4.579846164726907,
+        "intra_l2": 5.528554916381836,
+        "inter_l2": 25.319931030273438,
+        "n_images": 75
+      },
+      {
+        "folder": "P150",
+        "power_index": 150,
+        "inter_intra_ratio": 4.494751443474238,
+        "intra_l2": 5.606694221496582,
+        "inter_l2": 25.20069694519043,
+        "n_images": 75
+      }
+    ]
+  }
+}

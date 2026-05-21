@@ -1,6 +1,6 @@
 # Final 15-Fiber Dataset Audit
 
-- **Data root:** `/Users/ziqidai/Documents/PhotonicReasearch_PUF/code/speckle_recognition-main/recognition_dataset`
+- **Data root:** `data/recognition_dataset`
 - **Domains:** GreenAndRed, RedChange
 - **Fibers:** Fiber1, Fiber2, Fiber3, Fiber4, Fiber5, Fiber6, Fiber7, Fiber8, Fiber9, Fiber10, Fiber11, Fiber12, Fiber13, Fiber14, Fiber15
 - **Total videos:** 240

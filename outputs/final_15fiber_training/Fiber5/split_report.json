@@ -1,0 +1,1859 @@
+{
+  "split_strategy": "uniform_temporal",
+  "seed": 42,
+  "train_ratio": 0.7,
+  "val_ratio": 0.15,
+  "test_ratio": 0.15000000000000005,
+  "per_class_counts": {
+    "1": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "2": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "3": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "a": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "b": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "c": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "boy": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    },
+    "girl": {
+      "train": 22,
+      "val": 4,
+      "test": 8
+    }
+  },
+  "videos": [
+    {
+      "video_id": "red_green_fixed/Fiber5/1.avi",
+      "filename": "1.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "1",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "val"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "test"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "test"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "test"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "val"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/2.avi",
+      "filename": "2.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "2",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "test"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "test"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "val"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "test"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "val"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/3.avi",
+      "filename": "3.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "3",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "test"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "test"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "val"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "val"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/a.avi",
+      "filename": "a.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "a",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "test"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "test"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "val"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "test"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "val"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/b.avi",
+      "filename": "b.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "b",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "val"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "val"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "test"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "test"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/boy.avi",
+      "filename": "boy.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "boy",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "val"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "test"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "val"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "test"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "test"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/c.avi",
+      "filename": "c.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "c",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "val"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "test"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "test"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "val"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "test"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_fixed/Fiber5/girl.avi",
+      "filename": "girl.avi",
+      "domain": "red_green_fixed",
+      "fiber": "Fiber5",
+      "label_name": "girl",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "val"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "val"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "test"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "test"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "test"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/1.avi",
+      "filename": "1.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "1",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "test"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "test"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "test"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "val"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "val"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/2.avi",
+      "filename": "2.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "2",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "test"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "test"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "val"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "test"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "test"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "val"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/3.avi",
+      "filename": "3.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "3",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "test"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "val"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "test"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "val"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/a.avi",
+      "filename": "a.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "a",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "test"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "val"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "test"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "test"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "val"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "test"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "train"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/b.avi",
+      "filename": "b.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "b",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "test"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "val"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "test"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "test"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "test"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "val"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/boy.avi",
+      "filename": "boy.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "boy",
+      "n_frames": 151,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "train"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "test"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "test"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "val"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "val"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "test"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/c.avi",
+      "filename": "c.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "c",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "val"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "test"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "val"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "train"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "test"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "train"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "train"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "train"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "test"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "test"
+        }
+      ]
+    },
+    {
+      "video_id": "red_green_dynamic/Fiber5/girl.avi",
+      "filename": "girl.avi",
+      "domain": "red_green_dynamic",
+      "fiber": "Fiber5",
+      "label_name": "girl",
+      "n_frames": 150,
+      "n_clips": 17,
+      "clips": [
+        {
+          "clip_index": 0,
+          "start_frame": 0,
+          "end_frame": 16,
+          "split": "train"
+        },
+        {
+          "clip_index": 1,
+          "start_frame": 8,
+          "end_frame": 24,
+          "split": "train"
+        },
+        {
+          "clip_index": 2,
+          "start_frame": 16,
+          "end_frame": 32,
+          "split": "train"
+        },
+        {
+          "clip_index": 3,
+          "start_frame": 24,
+          "end_frame": 40,
+          "split": "val"
+        },
+        {
+          "clip_index": 4,
+          "start_frame": 32,
+          "end_frame": 48,
+          "split": "train"
+        },
+        {
+          "clip_index": 5,
+          "start_frame": 40,
+          "end_frame": 56,
+          "split": "train"
+        },
+        {
+          "clip_index": 6,
+          "start_frame": 48,
+          "end_frame": 64,
+          "split": "train"
+        },
+        {
+          "clip_index": 7,
+          "start_frame": 56,
+          "end_frame": 72,
+          "split": "test"
+        },
+        {
+          "clip_index": 8,
+          "start_frame": 64,
+          "end_frame": 80,
+          "split": "train"
+        },
+        {
+          "clip_index": 9,
+          "start_frame": 72,
+          "end_frame": 88,
+          "split": "train"
+        },
+        {
+          "clip_index": 10,
+          "start_frame": 80,
+          "end_frame": 96,
+          "split": "train"
+        },
+        {
+          "clip_index": 11,
+          "start_frame": 88,
+          "end_frame": 104,
+          "split": "train"
+        },
+        {
+          "clip_index": 12,
+          "start_frame": 96,
+          "end_frame": 112,
+          "split": "test"
+        },
+        {
+          "clip_index": 13,
+          "start_frame": 104,
+          "end_frame": 120,
+          "split": "test"
+        },
+        {
+          "clip_index": 14,
+          "start_frame": 112,
+          "end_frame": 128,
+          "split": "val"
+        },
+        {
+          "clip_index": 15,
+          "start_frame": 120,
+          "end_frame": 136,
+          "split": "train"
+        },
+        {
+          "clip_index": 16,
+          "start_frame": 128,
+          "end_frame": 144,
+          "split": "test"
+        }
+      ]
+    }
+  ]
+}

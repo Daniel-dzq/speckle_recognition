@@ -1,0 +1,110 @@
+{
+  "recommended_length_group": "Fiber9cm",
+  "recommended_total_length_cm": 9.0,
+  "green_prop_mm": 20,
+  "inter_intra_ratio": 1.5653,
+  "entropy_bits": 6.1834,
+  "green_loss_dB": 28.39,
+  "red_loss_dB": 4.69,
+  "threshold_db": 40.0,
+  "reason": "Section 3.2 three-criterion selection: (1) green loss \u2264 40.0 dB [gate]; (2) highest inter/intra distance ratio = 1.5653 [primary]; (3) pixel entropy = 6.183 bits [context]. Recommended batch: Fiber9cm (total fiber length 9.0 cm \u2014 not green-path length).",
+  "candidates": [
+    {
+      "length_group": "Fiber8cm",
+      "length_mm": 80,
+      "green_prop_mm": 10,
+      "ratio": 1.1639955047281163,
+      "entropy_bits": 5.773145994562855,
+      "green_loss_dB": null,
+      "red_loss_dB": null,
+      "intra_distance": 20.60575752258301,
+      "inter_distance": 23.985008239746094
+    },
+    {
+      "length_group": "Fiber9cm",
+      "length_mm": 90,
+      "green_prop_mm": 20,
+      "ratio": 1.565333122502019,
+      "entropy_bits": 6.183420957207077,
+      "green_loss_dB": 28.386668952041003,
+      "red_loss_dB": 4.69144326816874,
+      "intra_distance": 13.208327102661134,
+      "inter_distance": 20.675432205200195
+    },
+    {
+      "length_group": "Fiber11cm",
+      "length_mm": 110,
+      "green_prop_mm": 40,
+      "ratio": 1.230305183651181,
+      "entropy_bits": 5.405225194046913,
+      "green_loss_dB": 31.652258168649276,
+      "red_loss_dB": 4.972558579453649,
+      "intra_distance": 22.546606063842773,
+      "inter_distance": 27.739206314086914
+    },
+    {
+      "length_group": "Fiber13cm",
+      "length_mm": 130,
+      "green_prop_mm": 60,
+      "ratio": 1.0991644172235384,
+      "entropy_bits": 5.201459053159823,
+      "green_loss_dB": 32.62630753698555,
+      "red_loss_dB": 4.69144326816874,
+      "intra_distance": 20.979671669006347,
+      "inter_distance": 23.06010627746582
+    },
+    {
+      "length_group": "Fiber16cm",
+      "length_mm": 160,
+      "green_prop_mm": 90,
+      "ratio": 1.2603155833089377,
+      "entropy_bits": 5.614241581702866,
+      "green_loss_dB": 34.689286048405044,
+      "red_loss_dB": 5.558173614925293,
+      "intra_distance": 12.41171817779541,
+      "inter_distance": 15.642682075500488
+    }
+  ],
+  "criterion_scores": {
+    "Fiber8cm": {
+      "inter_intra_ratio": 1.164,
+      "ratio_score_normalized": 0.7436,
+      "entropy_bits": 5.7731,
+      "entropy_score_normalized": 0.9336,
+      "green_loss_dB": null,
+      "passes_loss_gate": true
+    },
+    "Fiber9cm": {
+      "inter_intra_ratio": 1.5653,
+      "ratio_score_normalized": 1.0,
+      "entropy_bits": 6.1834,
+      "entropy_score_normalized": 1.0,
+      "green_loss_dB": 28.39,
+      "passes_loss_gate": true
+    },
+    "Fiber11cm": {
+      "inter_intra_ratio": 1.2303,
+      "ratio_score_normalized": 0.786,
+      "entropy_bits": 5.4052,
+      "entropy_score_normalized": 0.8741,
+      "green_loss_dB": 31.65,
+      "passes_loss_gate": true
+    },
+    "Fiber13cm": {
+      "inter_intra_ratio": 1.0992,
+      "ratio_score_normalized": 0.7022,
+      "entropy_bits": 5.2015,
+      "entropy_score_normalized": 0.8412,
+      "green_loss_dB": 32.63,
+      "passes_loss_gate": true
+    },
+    "Fiber16cm": {
+      "inter_intra_ratio": 1.2603,
+      "ratio_score_normalized": 0.8051,
+      "entropy_bits": 5.6142,
+      "entropy_score_normalized": 0.908,
+      "green_loss_dB": 34.69,
+      "passes_loss_gate": true
+    }
+  }
+}

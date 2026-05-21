@@ -132,19 +132,20 @@ QFrame#recognitionResultBody {
     background-color: #F9F9FB;
     border: 1px solid #E5E5EA;
     border-radius: 12px;
-    min-height: 200px;
+    min-height: 240px;
 }
 QLabel#recognitionLine {
     color: #1C1C1E;
-    padding: 3px 0px;
-    min-height: 30px;
+    padding: 2px 0px;
+    min-height: 26px;
 }
 QLabel#recognitionDecision {
-    color: #636366;
-    font-size: 26px;
+    color: #5f9bff;
+    font-size: 24px;
     font-weight: 800;
-    padding: 10px 4px 4px 4px;
-    min-height: 40px;
+    padding: 6px 4px 2px 4px;
+    min-height: 36px;
+    max-height: 48px;
 }
 QLabel#camTitle {
     color: #1C1C1E;

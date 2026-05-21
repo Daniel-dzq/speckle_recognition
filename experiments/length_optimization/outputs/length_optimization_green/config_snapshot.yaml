@@ -1,0 +1,56 @@
+seed: 0
+output:
+  root: results
+  name: length_optimization_green
+dataset:
+  root: ../LengthOptimize/Green
+  layout: length_fiber_repeat
+  length_groups:
+  - Fiber8cm
+  - Fiber9cm
+  - Fiber11cm
+  - Fiber13cm
+  - Fiber16cm
+  fibers:
+  - Fiber1
+  - Fiber2
+  - Fiber3
+  - Fiber4
+  - Fiber5
+  fiber_lookup:
+    Fiber8cm:
+      length_mm: 80
+      green_prop_mm: 10
+    Fiber9cm:
+      length_mm: 90
+      green_prop_mm: 20
+    Fiber11cm:
+      length_mm: 110
+      green_prop_mm: 40
+    Fiber13cm:
+      length_mm: 130
+      green_prop_mm: 60
+    Fiber16cm:
+      length_mm: 160
+      green_prop_mm: 90
+length_groups_order:
+- Fiber8cm
+- Fiber9cm
+- Fiber11cm
+- Fiber13cm
+- Fiber16cm
+preprocess:
+  grayscale: true
+  center_crop_size: 400
+  resize: 112
+  normalize: minmax
+  frame_strategy: middle
+  n_frames: 1
+entropy:
+  roi: 400
+recommendation:
+  green_loss_threshold_db: 40.0
+power:
+  csv_path: ../fiber_loss/power_loss.csv
+cache:
+  enabled: true

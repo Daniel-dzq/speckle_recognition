@@ -1,0 +1,20 @@
+{
+  "generated_utc": "2026-05-13T09:57:13.438689+00:00",
+  "script": "plot_fig3_length_optimization.py",
+  "output_dir": "experiments/length_optimization/outputs/fig3",
+  "base_name": "Fig3_length_optimization",
+  "dpi_png": 600,
+  "input_csv": "experiments/length_optimization/outputs/length_optimization_green/tables/per_length_summary.csv",
+  "input_optimal_json": "experiments/length_optimization/outputs/length_optimization_green/optimal_length.json",
+  "length_mm_seen": [
+    80,
+    90,
+    110,
+    130,
+    160
+  ],
+  "length_meaning": "total_fiber_length_cm",
+  "confirmed_by_PI": true,
+  "optimal_total_fiber_length_cm": 9,
+  "legacy_length_datasets_excluded": true
+}

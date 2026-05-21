@@ -273,12 +273,16 @@ class ChallengePreviewWidget(QGroupBox):
 class RecognitionResultWidget(QGroupBox):
     """Right-column challenge–response recognition summary."""
 
-    BODY_MIN_H = 200
+    CARD_MIN_H = 280
+    BODY_MIN_H = 240
+    ROW_LABEL_PX = 17
+    ROW_VALUE_PX = 20
+    STATUS_FONT_PX = 24
 
     def __init__(self, parent=None):
         super().__init__("", parent)
         style_demo_card(self, object_name="recognitionResultBox")
-        self.setMinimumHeight(260)
+        self.setMinimumHeight(self.CARD_MIN_H)
 
         outer = QVBoxLayout(self)
         outer.setSpacing(8)
@@ -289,15 +293,18 @@ class RecognitionResultWidget(QGroupBox):
         self._body.setObjectName("recognitionResultBody")
         self._body.setMinimumHeight(self.BODY_MIN_H)
         body_layout = QVBoxLayout(self._body)
-        body_layout.setSpacing(6)
-        body_layout.setContentsMargins(14, 12, 14, 12)
+        body_layout.setSpacing(5)
+        body_layout.setContentsMargins(12, 10, 12, 10)
 
         self._lbl_challenge = QLabel()
         self._lbl_predicted = QLabel()
         self._lbl_confidence = QLabel()
         self._lbl_match = QLabel()
-        self._lbl_decision = QLabel("Decision: Waiting")
-        self._lbl_decision.setObjectName("recognitionDecision")
+        self._lbl_status = QLabel("WAITING")
+        self._lbl_status.setObjectName("recognitionDecision")
+        self._lbl_status.setAlignment(Qt.AlignCenter)
+        self._lbl_status.setMinimumHeight(36)
+        self._lbl_status.setMaximumHeight(48)
 
         for lbl in (
             self._lbl_challenge,
@@ -306,101 +313,130 @@ class RecognitionResultWidget(QGroupBox):
             self._lbl_match,
         ):
             lbl.setObjectName("recognitionLine")
-            lbl.setWordWrap(True)
+            lbl.setWordWrap(False)
             lbl.setTextFormat(Qt.RichText)
-            lbl.setFont(demo_font(16))
             body_layout.addWidget(lbl)
 
-        body_layout.addSpacing(4)
-        self._lbl_decision.setWordWrap(True)
-        body_layout.addWidget(self._lbl_decision)
-        body_layout.addStretch()
-        outer.addWidget(self._body, stretch=1)
+        body_layout.addSpacing(6)
+        body_layout.addWidget(self._lbl_status)
+        outer.addWidget(self._body, stretch=0)
 
-        self._decision_style_waiting()
+        self._apply_status_style("WAITING")
 
     def apply_metrics(self, window_height: int) -> None:
-        body_h = max(self.BODY_MIN_H, min(240, int(window_height * 0.22)))
+        body_h = max(self.BODY_MIN_H, min(280, int(window_height * 0.24)))
         self._body.setMinimumHeight(body_h)
-        self.setMinimumHeight(body_h + 72)
+        self.setMinimumHeight(body_h + 56)
 
-    def _decision_style_waiting(self) -> None:
-        self._lbl_decision.setStyleSheet(
-            "color: #5f9bff; font-size: 26px; font-weight: 800;"
+    def _apply_status_style(self, decision: str) -> None:
+        key = (decision or "WAITING").upper()
+        if key == "ACCESS GRANTED":
+            color, px = "#248A3D", self.STATUS_FONT_PX
+        elif key == "ACCESS DENIED":
+            color, px = "#D70015", self.STATUS_FONT_PX
+        elif key in ("LOW CONFIDENCE", "VERIFY"):
+            color, px = "#C93400", 22
+        else:
+            color, px = "#5f9bff", 22
+        self._lbl_status.setStyleSheet(
+            f"color: {color}; font-size: {px}px; font-weight: 800;"
+        )
+        self._lbl_status.setFont(demo_font(px, weight=800))
+
+    def _set_match_row(self, match: Optional[bool]) -> None:
+        if match is None:
+            match_val, match_color = "—", "#636366"
+        elif match:
+            match_val, match_color = "Yes", "#248A3D"
+        else:
+            match_val, match_color = "No", "#D70015"
+        self._lbl_match.setText(
+            f'<span style="font-size:{self.ROW_LABEL_PX}px; color:#636366; font-weight:600;">'
+            f"Match:</span> "
+            f'<span style="font-size:{self.ROW_VALUE_PX}px; font-weight:800; color:{match_color};">'
+            f"{match_val}</span>"
         )
 
-    def _decision_style_granted(self) -> None:
-        self._lbl_decision.setStyleSheet(
-            "color: #248A3D; font-size: 28px; font-weight: 800;"
+    def apply_snapshot(self, snap) -> None:
+        """Apply a DisplaySnapshot from prediction_display."""
+        ch = snap.challenge or "—"
+        pred = snap.predicted or "—"
+        self._lbl_challenge.setText(
+            row_html("Challenge:", ch, value_px=22, label_px=self.ROW_LABEL_PX)
         )
-
-    def _decision_style_denied(self) -> None:
-        self._lbl_decision.setStyleSheet(
-            "color: #D70015; font-size: 28px; font-weight: 800;"
+        self._lbl_predicted.setText(
+            row_html("Predicted:", pred, value_px=22, label_px=self.ROW_LABEL_PX)
         )
-
-    def _decision_style_unknown(self) -> None:
-        self._lbl_decision.setStyleSheet(
-            "color: #C93400; font-size: 26px; font-weight: 800;"
-        )
+        if snap.confidence is None:
+            self._lbl_confidence.setText(
+                row_html("Confidence:", "—", value_px=18, label_px=self.ROW_LABEL_PX)
+            )
+        else:
+            self._lbl_confidence.setText(
+                row_html(
+                    "Confidence:",
+                    f"{snap.confidence:.2f}",
+                    value_px=20,
+                    label_px=self.ROW_LABEL_PX,
+                )
+            )
+        self._set_match_row(snap.match)
+        status = (snap.decision or "WAITING").upper()
+        self._lbl_status.setText(status)
+        self._apply_status_style(status)
 
     def set_waiting(self, challenge_label: str = "") -> None:
+        from gui.prediction_display import DisplaySnapshot
+
         ch = _normalize_label(challenge_label)
-        self._lbl_challenge.setText(
-            row_html("Challenge:", ch if ch else "—", value_px=24, label_px=17)
+        self.apply_snapshot(
+            DisplaySnapshot(
+                challenge=ch,
+                predicted="—",
+                confidence=None,
+                match=None,
+                decision="WAITING",
+                reason="",
+            )
         )
-        self._lbl_predicted.setText(row_html("Predicted:", "—", value_px=24, label_px=17))
-        self._lbl_confidence.setText(row_html("Confidence:", "—", value_px=18, label_px=17))
-        self._lbl_match.setText(row_html("Match:", "—", value_px=18, label_px=17))
-        self._lbl_decision.setText("Decision: Waiting")
-        self._decision_style_waiting()
 
     def set_prediction(
         self,
         challenge_label: str,
         predicted_label: str,
         confidence: Optional[float],
+        *,
+        match: Optional[bool] = None,
     ) -> None:
+        from gui.prediction_display import DisplaySnapshot
+
         ch = _normalize_label(challenge_label)
         pred = _normalize_label(predicted_label) or "—"
-        self._lbl_challenge.setText(
-            row_html("Challenge:", ch if ch else "—", value_px=24, label_px=17)
-        )
-        self._lbl_predicted.setText(row_html("Predicted:", pred, value_px=26, label_px=17))
-        if confidence is None:
-            self._lbl_confidence.setText(row_html("Confidence:", "—", value_px=18, label_px=17))
-        else:
-            self._lbl_confidence.setText(
-                row_html("Confidence:", f"{confidence:.2f}", value_px=19, label_px=17)
+        if match is None and ch and pred not in ("—", "?", "-"):
+            match = labels_match(ch, pred)
+        self.apply_snapshot(
+            DisplaySnapshot(
+                challenge=ch,
+                predicted=pred,
+                confidence=confidence,
+                match=match,
+                decision="WAITING",
+                reason="",
             )
-
-        if not ch or pred in ("—", "?", "-"):
-            match_val = "—"
-            match_color = "#636366"
-        elif labels_match(ch, pred):
-            match_val = "Yes"
-            match_color = "#248A3D"
-        else:
-            match_val = "No"
-            match_color = "#D70015"
-        self._lbl_match.setText(
-            f'<span style="font-size:17px; color:#636366; font-weight:600;">Match:</span> '
-            f'<span style="font-size:20px; font-weight:800; color:{match_color};">'
-            f"{match_val}</span>"
         )
 
     def set_decision(self, decision: str) -> None:
-        text = _normalize_label(decision) or "Waiting"
-        self._lbl_decision.setText(f"Decision: {text}")
-        low = text.lower()
-        if "granted" in low:
-            self._decision_style_granted()
-        elif "denied" in low:
-            self._decision_style_denied()
-        elif "unknown" in low:
-            self._decision_style_unknown()
-        else:
-            self._decision_style_waiting()
+        status = (decision or "WAITING").strip().upper()
+        if "GRANTED" in status and "DENIED" not in status:
+            status = "ACCESS GRANTED"
+        elif "DENIED" in status:
+            status = "ACCESS DENIED"
+        elif "LOW" in status or "VERIFY" in status:
+            status = "LOW CONFIDENCE"
+        elif not status or status in ("WAITING", "UNKNOWN"):
+            status = "WAITING"
+        self._lbl_status.setText(status)
+        self._apply_status_style(status)
 
     def clear_result(self) -> None:
         self.set_waiting("")

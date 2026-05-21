@@ -1,9 +1,0 @@
-# Track figure assets; exclude bulky authoring sources and GUI dumps.
-softcopyright/
-
-patent/*.blend
-patent/*.blend1
-patent/*.pptx
-patent/专利附图_可编辑.pptx
-
-**/.DS_Store

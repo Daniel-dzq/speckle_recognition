@@ -1,12 +1,38 @@
-# `figures/` layout
+# Figures
 
-- **`paper/`** — journal target structure (`Fig1`–`Fig8`) plus `supplementary/`. Regenerated vector/raster exports from `scripts/generate_all_paper_figures.py` land here.
-- **`archive_old/`** — legacy or superseded assets (see `archive_old/README.md`).
-- **`patent/`** — source diagrams and Blender project (not all English).
-- **`figures_publication/` / `paper_assets/`** — prior publication pack (audit before mixing with `paper/`).
-- **`figures_competition/`** — planning-document triplets (parallel track).
+Publication figures live only under `figures/paper/`. Each figure has its own folder with PNG, PDF, SVG, data summary CSV, and report MD.
 
-## Policy
+## Layout
 
-- Do not delete archived files; promote English-only, data-backed plots into `paper/`.
-- Length optimization must use **`results/length_optimization_green/`** only.
+```
+figures/paper/
+  Fig2_length_optimization/
+  Fig3_authentication/
+  Fig4_challenge_speckle/
+  Fig5_stability/
+  Fig6_disturbance/
+```
+
+## Generate
+
+From repository root:
+
+```bash
+python scripts/paper_figures/generate_fig2_length_optimization.py
+python scripts/paper_figures/generate_fig3_auth_performance.py
+python scripts/paper_figures/generate_fig4_challenge_speckle_examples.py
+python scripts/paper_figures/generate_fig5_stability.py
+python scripts/paper_figures/generate_fig6_disturbance.py
+```
+
+Or:
+
+```bash
+python scripts/paper_figures/generate_all_paper_figures.py
+```
+
+Generators overwrite final outputs in place. Use `--archive-old` only if you need timestamped backups.
+
+## Summaries (no figures)
+
+Tabular physical-characterization summaries: `outputs/physical_characterization/` (CSV/JSON/MD only, no PNG/PDF/SVG).

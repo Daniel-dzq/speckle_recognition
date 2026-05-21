@@ -14,7 +14,6 @@ from PySide6.QtCore    import Qt, QTimer, QPropertyAnimation
 from PySide6.QtGui     import QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import QFrame, QVBoxLayout, QLabel, QSizePolicy
 
-from gui.challenge_widgets import labels_match
 from gui.demo_presentation import demo_font
 from gui.robot_canvas import RobotCanvas
 from gui.effects      import (make_glow, pulse_glow,
@@ -26,8 +25,7 @@ COLOR_NEUTRAL = "#5f9bff"
 COLOR_READING = "#ffd54f"
 COLOR_OK      = "#3ddc84"
 COLOR_FAIL    = "#ff5566"
-
-LOW_CONFIDENCE_THRESHOLD = 0.85
+COLOR_WARN    = "#ffb020"
 
 
 def _manual_screenshot_mode_env() -> bool:
@@ -220,34 +218,15 @@ class RobotPanel(QFrame):
                 self._do_deny(reason="Expected class 'A', got 'B'")
                 return
 
-        conf      = float(result.get("confidence", 0.0))
-        topk      = result.get("topk",       [])
-        smoothed  = result.get("smoothed",   "?")
-        challenge = self._challenge_label
-        pred = str(smoothed).strip() if smoothed else "?"
-        if challenge:
-            authorized = (conf >= LOW_CONFIDENCE_THRESHOLD) and labels_match(challenge, pred)
-        else:
-            authorized = False
-
         self._read_blink_timer.stop()
-        self.lbl_conf.setText(f"Confidence  {conf*100:.1f}%")
+        self.lbl_conf.setText(
+            f"Confidence  {float(result.get('confidence', 0.0)) * 100:.1f}%"
+        )
+        topk = result.get("topk", [])
         self.lbl_topk.setText(
             "  ".join(f"{cls} {p*100:.0f}%" for cls, p in topk[:3])
         )
-
-        if authorized:
-            self._do_authorize(smoothed, conf)
-        else:
-            if not challenge:
-                reason = "No SLM challenge sent yet"
-            elif conf < LOW_CONFIDENCE_THRESHOLD:
-                reason = f"Low confidence ({conf*100:.0f}%)"
-            elif not labels_match(challenge, pred):
-                reason = f"Expected challenge '{challenge}', got '{pred}'"
-            else:
-                reason = "Access denied"
-            self._do_deny(reason=reason)
+        self.on_idle()
 
     def on_unauthorized(self, reason: str = "Unrecognized fiber"):
         self._read_blink_timer.stop()
@@ -282,12 +261,15 @@ class RobotPanel(QFrame):
             self.lbl_topk.setText(
                 "  ".join(f"{cls} {p * 100:.0f}%" for cls, p in topk[:3])
             )
-        low = (decision or "").strip().lower()
-        if "granted" in low:
+        key = (decision or "").strip().upper()
+        if key == "ACCESS GRANTED":
             self._do_authorize(predicted or "?", 1.0)
             return
-        if "denied" in low or "unknown" in low:
-            self._do_deny(reason or decision or "Access denied")
+        if key == "ACCESS DENIED":
+            self._do_deny(reason or "Access denied")
+            return
+        if key in ("LOW CONFIDENCE", "VERIFY"):
+            self._do_verify(reason or "Low confidence — verify")
             return
         self.on_idle()
 
@@ -296,6 +278,7 @@ class RobotPanel(QFrame):
     # ═══════════════════════════════════════════════════════
 
     def _do_authorize(self, letter: str, conf: float):
+        self.lbl_conf.setStyleSheet("")
         self._set_glow(COLOR_OK)
         self.robot.set_state_color(QColor(COLOR_OK))
         self.robot.set_expression("happy")
@@ -315,7 +298,21 @@ class RobotPanel(QFrame):
         # Fade aura down slightly after 1.8 s
         QTimer.singleShot(1800, lambda: self.robot.set_aura_alpha(0.4))
 
+    def _do_verify(self, reason: str):
+        """Label matches but confidence is below threshold — warning / standby."""
+        self._set_glow(COLOR_WARN)
+        self.robot.set_state_color(QColor(COLOR_WARN))
+        self.robot.set_expression("scanning")
+        self.robot.set_aura_alpha(0.35)
+        self.lbl_status.setText("VERIFY")
+        self._fit_status_heading_font()
+        self.lbl_action.setText(reason or "Low confidence — verify")
+        self.lbl_conf.setStyleSheet("color: #ffb020;")
+        if hasattr(self, "_banner_callback"):
+            self._banner_callback("", COLOR_WARN)
+
     def _do_deny(self, reason: str):
+        self.lbl_conf.setStyleSheet("")
         self._set_glow(COLOR_FAIL)
         self.robot.set_state_color(QColor(COLOR_FAIL))
         self.robot.set_expression("sad")

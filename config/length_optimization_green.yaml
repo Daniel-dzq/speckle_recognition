@@ -23,7 +23,7 @@ output:
   name: length_optimization_green
 
 dataset:
-  root: ../LengthOptimize/Green      # resolved relative to this YAML file
+  root: ../experiments/length_optimization/data/Green
   layout: length_fiber_repeat
   length_groups: [Fiber8cm, Fiber9cm, Fiber11cm, Fiber13cm, Fiber16cm]
   fibers: [Fiber1, Fiber2, Fiber3, Fiber4, Fiber5]
@@ -57,7 +57,7 @@ recommendation:
   green_loss_threshold_db: 40.0
 
 power:
-  csv_path: ../fiber_loss/power_loss.csv   # merged from fiber9/11/16cm.xlsx
+  csv_path: ../experiments/fiber_loss/data/power_loss.csv
 
 cache:
   enabled: true

@@ -66,6 +66,7 @@ def resolve_data_root(data_root: str, project_root: Optional[str] = None) -> str
     candidates = [os.path.abspath(data_root)]
     if project_root:
         candidates.extend([
+            os.path.join(project_root, "data", "recognition_dataset"),
             os.path.join(project_root, "recognition_dataset", data_root),
             os.path.join(project_root, "recognition_dataset"),
             os.path.join(project_root, data_root),

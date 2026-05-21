@@ -10,6 +10,7 @@ Improved version:
 """
 
 import os
+import re
 import sys
 import glob
 import json
@@ -56,9 +57,9 @@ from gui.robot_panel        import RobotPanel
 from gui.challenge_widgets  import (
     ChallengePreviewWidget,
     RecognitionResultWidget,
-    labels_match,
     normalize_label,
 )
+from gui.prediction_display import PredictionDisplaySmoother
 from gui.challenge_manifest import (
     challenge_inputs_dir,
     load_challenge_manifest,
@@ -211,7 +212,7 @@ QScrollArea {
 FIBER_MODELS_DIR = os.path.join(ROOT, "models", "final_15fibers")
 FIBER_MODELS_DIR_LEGACY = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
 LABEL_MAP_PATH = os.path.join(FIBER_MODELS_DIR, "label_map.json")
-LOW_CONFIDENCE_THRESHOLD = 0.40
+LOW_CONFIDENCE_THRESHOLD = 0.60
 
 DEFAULT_TEXT_CHALLENGES = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -249,6 +250,11 @@ def discover_fiber_models(model_dir: str = None):
                 if name.startswith("Fiber") and name not in result:
                     result[name] = os.path.join(directory, f)
     return result
+
+
+def _fiber_natural_sort_key(name: str) -> tuple:
+    m = re.match(r"^Fiber(\d+)$", name, re.I)
+    return (int(m.group(1)), name.lower()) if m else (9999, name.lower())
 
 
 def load_label_map_class_names() -> list[str]:
@@ -392,6 +398,14 @@ class MainWindow(QMainWindow):
         self._slm_window = None
         self._camera_worker = None
         self._infer_worker = InferenceWorker(self)
+        self._display_smoother = PredictionDisplaySmoother(
+            confidence_threshold=LOW_CONFIDENCE_THRESHOLD,
+            hold_sec=1.0,
+            banner_hold_sec=1.25,
+        )
+        self._banner_hide_timer = QTimer(self)
+        self._banner_hide_timer.setSingleShot(True)
+        self._banner_hide_timer.timeout.connect(self._hide_overlay_banner)
         self._capture_active = False
         self._last_frame = None
         self._fps = 0.0
@@ -973,7 +987,7 @@ class MainWindow(QMainWindow):
         self._combo_fiber.clear()
 
         if self._fiber_models:
-            names = sorted(self._fiber_models.keys())
+            names = sorted(self._fiber_models.keys(), key=_fiber_natural_sort_key)
             for name in names:
                 self._combo_fiber.addItem(name)
             self._log(f"Found fiber models: {names}")
@@ -1231,8 +1245,11 @@ class MainWindow(QMainWindow):
                 self.current_challenge_label, source=source
             )
 
+        self._display_smoother.reset()
+        self._hide_overlay_banner()
         self._recognition_result.set_waiting(self.current_challenge_label)
         self._robot_panel.set_challenge_label(self.current_challenge_label)
+        self._robot_panel.on_idle()
 
         if send_slm:
             self._push_challenge_to_slm()
@@ -1259,32 +1276,6 @@ class MainWindow(QMainWindow):
         win.repaint()
         win.update()
         win.force_visual_refresh()
-
-    def _evaluate_decision(
-        self, predicted: str, confidence: Optional[float]
-    ) -> tuple[str, str]:
-        """Return (decision_text, reason_for_robot)."""
-        if not self.current_challenge_label:
-            return "Waiting", "No challenge sent yet"
-        if self._infer_worker._model is None or not self._active_fiber:
-            return "Waiting", "No authorized model loaded"
-        pred = str(predicted).strip() if predicted else ""
-        if not pred or pred in ("?", "—", "-"):
-            return "Unknown", "No prediction yet"
-        if confidence is None:
-            return "Unknown", "Confidence unavailable"
-        try:
-            conf_f = float(confidence)
-        except (TypeError, ValueError):
-            return "Unknown", "Confidence unavailable"
-        if conf_f < LOW_CONFIDENCE_THRESHOLD:
-            return "Access Denied", f"Low confidence ({conf_f * 100:.0f}%)"
-        if labels_match(self.current_challenge_label, pred):
-            return "Access Granted", f"Match on {self._active_fiber}"
-        return (
-            "Access Denied",
-            f"Expected '{self.current_challenge_label}', got '{pred}'",
-        )
 
     def _send_to_slm(self):
         if self._is_image_challenge_mode():
@@ -2048,10 +2039,13 @@ class MainWindow(QMainWindow):
         _demo_trace_ui(
             f"_on_prediction top1={result.get('top1')!r} conf={result.get('confidence')}"
         )
+        if os.environ.get("SPECKLE_FORCE_AUTH_STATE", "").strip() and _env_manual_screenshot_mode():
+            self._robot_panel.on_prediction(result)
+            return
+
         conf = result.get("confidence")
         smoothed = result.get("smoothed", "?")
         pred_label = str(smoothed).strip() if smoothed else "?"
-
         conf_f: Optional[float] = None
         if conf is not None:
             try:
@@ -2059,17 +2053,25 @@ class MainWindow(QMainWindow):
             except (TypeError, ValueError):
                 conf_f = None
 
-        self._recognition_result.set_prediction(
-            self.current_challenge_label,
-            pred_label,
-            conf_f,
+        feed = self._display_smoother.feed(
+            challenge=self.current_challenge_label,
+            raw_label=pred_label,
+            raw_confidence=conf_f,
         )
-        decision, reason = self._evaluate_decision(pred_label, conf_f)
-        self._recognition_result.set_decision(decision)
+        if not feed.refresh_ui:
+            return
 
-        if conf_f is not None and conf_f < LOW_CONFIDENCE_THRESHOLD:
+        snap = feed.snapshot
+        self._recognition_result.apply_snapshot(snap)
+
+        show_warn = snap.decision == "LOW CONFIDENCE" or (
+            snap.match is True
+            and snap.confidence is not None
+            and snap.confidence < LOW_CONFIDENCE_THRESHOLD
+        )
+        if show_warn and snap.confidence is not None:
             self._lbl_auth_warning.setText(
-                f"Low confidence ({conf_f * 100:.0f}%) — possible unauthorized fiber or noise"
+                f"Low confidence ({snap.confidence * 100:.0f}%) — verify before granting access"
             )
             self._lbl_auth_warning.setStyleSheet(
                 "color: #ff6b6b; font-weight: bold; font-size: 11px; "
@@ -2081,16 +2083,30 @@ class MainWindow(QMainWindow):
             self._lbl_auth_warning.setVisible(False)
 
         self._robot_panel.set_challenge_label(self.current_challenge_label)
-        if os.environ.get("SPECKLE_FORCE_AUTH_STATE", "").strip() and _env_manual_screenshot_mode():
-            self._robot_panel.on_prediction(result)
-        else:
-            self._robot_panel.apply_decision(
-                decision, predicted=pred_label, reason=reason, result=result
+        self._robot_panel.apply_decision(
+            snap.decision,
+            predicted=snap.predicted,
+            reason=snap.reason,
+            result=result,
+        )
+
+        if snap.emit_banner:
+            self._show_overlay_banner(
+                "ACCESS GRANTED",
+                "#3ddc84",
+                hold_ms=int(self._display_smoother.banner_hold_sec * 1000),
             )
+        elif snap.hide_banner:
+            self._hide_overlay_banner()
+
         from PySide6.QtCore import QTimer as _QTimer
         _QTimer.singleShot(2200, lambda: self._cam_glow.setBlurRadius(0))
 
-    def _show_overlay_banner(self, text: str, color: str):
+    def _hide_overlay_banner(self) -> None:
+        self._banner_hide_timer.stop()
+        self._overlay_banner.hide()
+
+    def _show_overlay_banner(self, text: str, color: str, hold_ms: int = 2400):
         """Show a brief overlay banner centred over the camera feed.
 
         The banner is parented to the camera *card* (not the pixmap QLabel): a
@@ -2098,6 +2114,10 @@ class MainWindow(QMainWindow):
         overlay text or QGraphicsOpacityEffect on macOS; ``grab()`` then omits
         the glyph layer too.
         """
+        if not (text or "").strip():
+            self._hide_overlay_banner()
+            return
+        self._banner_hide_timer.stop()
         self._overlay_banner.setText(text)
         self._overlay_banner.setAlignment(Qt.AlignCenter)
         self._overlay_banner.setGraphicsEffect(None)
@@ -2161,8 +2181,7 @@ class MainWindow(QMainWindow):
         self._overlay_banner.setGeometry(x, y, bw, bh)
         self._overlay_banner.raise_()
         self._overlay_banner.show()
-        from PySide6.QtCore import QTimer as _QTimer
-        _QTimer.singleShot(2400, self._overlay_banner.hide)
+        self._banner_hide_timer.start(max(800, hold_ms))
 
     @Slot(str)
     def _on_infer_error(self, msg: str):
