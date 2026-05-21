@@ -8,11 +8,32 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QGroupBox, QVBoxLayout
 
 
+def _to_qfont_weight(weight) -> QFont.Weight:
+    if isinstance(weight, QFont.Weight):
+        return weight
+    try:
+        weight_int = int(weight)
+    except Exception:
+        return QFont.Weight.Normal
+
+    if weight_int >= 800:
+        return QFont.Weight.ExtraBold
+    if weight_int >= 700:
+        return QFont.Weight.Bold
+    if weight_int >= 600:
+        return QFont.Weight.DemiBold
+    if weight_int >= 500:
+        return QFont.Weight.Medium
+    if weight_int <= 300:
+        return QFont.Weight.Light
+    return QFont.Weight.Normal
+
+
 def demo_font(
     pixel_size: int,
     *,
     bold: bool = False,
-    weight: int | None = None,
+    weight: int | QFont.Weight | None = None,
 ) -> QFont:
     f = QFont()
     f.setFamilies(
@@ -20,9 +41,9 @@ def demo_font(
     )
     f.setPixelSize(pixel_size)
     if weight is not None:
-        f.setWeight(weight)
+        f.setWeight(_to_qfont_weight(weight))
     elif bold:
-        f.setWeight(QFont.Bold)
+        f.setWeight(_to_qfont_weight(QFont.Weight.Bold))
     return f
 
 
