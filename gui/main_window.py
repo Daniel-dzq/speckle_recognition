@@ -252,6 +252,14 @@ def discover_fiber_models(model_dir: str = None):
     return result
 
 
+def all_fiber_names() -> list[str]:
+    return [f"Fiber{i}" for i in range(1, 16)]
+
+
+def fiber_model_path(fiber_name: str) -> str:
+    return os.path.join(FIBER_MODELS_DIR, f"{fiber_name}.pth")
+
+
 def _fiber_natural_sort_key(name: str) -> tuple:
     m = re.match(r"^Fiber(\d+)$", name, re.I)
     return (int(m.group(1)), name.lower()) if m else (9999, name.lower())
@@ -400,8 +408,9 @@ class MainWindow(QMainWindow):
         self._infer_worker = InferenceWorker(self)
         self._display_smoother = PredictionDisplaySmoother(
             confidence_threshold=LOW_CONFIDENCE_THRESHOLD,
-            hold_sec=1.0,
-            banner_hold_sec=1.25,
+            hold_sec=2.0,
+            banner_hold_sec=2.0,
+            granted_release_hold_sec=2.0,
         )
         self._banner_hide_timer = QTimer(self)
         self._banner_hide_timer.setSingleShot(True)
@@ -413,13 +422,15 @@ class MainWindow(QMainWindow):
         self._manual_feed_timer: Optional[QTimer] = None
         self._manual_feed_active = False
         self._manual_feed_phase = 0
-        self.current_challenge_label = ""
+        self.current_challenge_label: Optional[str] = None
+        self.last_sent_challenge_label: Optional[str] = None
         self._challenge_source = ""
         self._challenge_image_path: Optional[str] = None
         self._challenge_cycle: list[str] = []
-        self._challenge_cycle_index = 0
+        self._challenge_cycle_index = -1
         self._ppt_challenge_entries: list[dict] = []
         self._challenge_image_by_label: dict[str, str] = {}
+        self._manifest_loaded = False
 
         self._top_splitter = None
         self._left_scroll = None
@@ -432,12 +443,12 @@ class MainWindow(QMainWindow):
         self._apply_style()
         self._connect_signals()
         self._infer_worker.start()
-        self._challenge_cycle = self._discover_challenge_cycle()
         if not self._try_load_challenge_manifest():
-            pass
+            self._challenge_cycle = self._discover_challenge_cycle()
+            self._challenge_cycle_index = -1
+        self._apply_startup_challenge_ui()
         self._refresh_fiber_list()
         self._refresh_screen_list()
-        self._recognition_result.clear_result()
         self._apply_responsive_metrics(force=True)
         self._log(
             "Speckle-PUF demo ready: select a challenge pattern, send it to the SLM, "
@@ -552,8 +563,31 @@ class MainWindow(QMainWindow):
                     out.append(stem)
         return out or ["A"]
 
+    def _auth_challenge_label(self) -> str:
+        """Challenge used for recognition (set only after successful Send to SLM)."""
+        return (self.last_sent_challenge_label or "").strip()
+
+    def _has_challenge_selected(self) -> bool:
+        return bool((self.current_challenge_label or "").strip())
+
+    def _apply_startup_challenge_ui(self) -> None:
+        """Blank preview and WAITING recognition until the user selects a challenge."""
+        self.current_challenge_label = None
+        self._challenge_image_path = None
+        self._challenge_source = ""
+        if self._manifest_loaded:
+            self._challenge_preview.set_manifest_ready(len(self._challenge_cycle))
+        else:
+            self._challenge_preview.clear_challenge()
+        self._input_letter.blockSignals(True)
+        self._input_letter.setText("")
+        self._input_letter.blockSignals(False)
+        self._recognition_result.clear_result()
+        self._robot_panel.set_challenge_label("")
+        self._robot_panel.on_idle()
+
     def _try_load_challenge_manifest(self) -> bool:
-        """Load challenge_inputs/manifest.json and show the first challenge."""
+        """Load challenge_inputs/manifest.json into memory without selecting a challenge."""
         manifest = load_challenge_manifest()
         if not manifest:
             return False
@@ -565,28 +599,26 @@ class MainWindow(QMainWindow):
         self._ppt_challenge_entries = entries
         self._challenge_image_by_label = {e["label"]: e["image"] for e in entries}
         self._challenge_cycle = [e["label"] for e in entries]
-        self._challenge_cycle_index = 0
-
-        first = entries[0]
-        self._apply_challenge_label(
-            first["label"],
-            source="image",
-            image_path=first["image"],
-            send_slm=False,
-        )
+        self._challenge_cycle_index = -1
+        self._manifest_loaded = True
+        self.current_challenge_label = None
+        self.last_sent_challenge_label = None
+        self._challenge_image_path = None
         self._log(
-            f"[Challenge] Loaded PPT challenge set ({len(entries)} items) from "
-            f"{challenge_inputs_dir()}"
+            f"[Challenge] Challenge set loaded ({len(entries)} items) from "
+            f"{challenge_inputs_dir()} — use Prev/Next to select, then Send to SLM"
         )
         return True
 
     def _reload_challenge_manifest(self) -> None:
         if self._try_load_challenge_manifest():
+            self._apply_startup_challenge_ui()
             QMessageBox.information(
                 self,
                 "Challenge set",
                 f"Loaded {len(self._ppt_challenge_entries)} challenges from\n"
-                f"{manifest_path()}",
+                f"{manifest_path()}\n\n"
+                "Use Prev/Next to select a challenge, then Send to SLM.",
             )
         else:
             QMessageBox.warning(
@@ -599,166 +631,89 @@ class MainWindow(QMainWindow):
     def _build_left_panel(self):
         container = QWidget()
         layout = QVBoxLayout(container)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
         layout.setContentsMargins(6, 6, 6, 6)
 
         self._challenge_preview = ChallengePreviewWidget()
         apply_premium_shadow(self._challenge_preview)
         layout.addWidget(self._challenge_preview, stretch=0)
 
-        slm_box = QGroupBox("")
-        style_control_section(slm_box)
-        slm_outer = QVBoxLayout(slm_box)
-        slm_outer.setSpacing(10)
-        slm_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(slm_outer, "SLM display")
-        sl = QGridLayout()
-        sl.setSpacing(8)
-        sl.setContentsMargins(4, 0, 4, 4)
+        ch_nav = QHBoxLayout()
+        ch_nav.setSpacing(8)
+        self._btn_prev = QPushButton("◀ Prev")
+        self._btn_next = QPushButton("Next ▶")
+        for btn in (self._btn_prev, self._btn_next):
+            btn.setMinimumHeight(44)
+            btn.setFont(demo_font(16, weight=QFont.DemiBold))
+        self._btn_prev.clicked.connect(self._prev_challenge)
+        self._btn_next.clicked.connect(self._next_challenge)
+        ch_nav.addWidget(self._btn_prev, 1)
+        ch_nav.addWidget(self._btn_next, 1)
+        layout.addLayout(ch_nav)
+
+        self._btn_send_slm = QPushButton("Send to SLM")
+        self._btn_send_slm.setObjectName("primary")
+        self._btn_send_slm.setMinimumHeight(46)
+        self._btn_send_slm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_send_slm.setFont(demo_font(16, weight=QFont.Bold))
+        self._btn_send_slm.clicked.connect(self._send_to_slm)
+        layout.addWidget(self._btn_send_slm)
 
         self._btn_show_slm = QPushButton("Open SLM Window")
         self._btn_show_slm.setObjectName("openSlmPrimary")
-        self._btn_show_slm.setMinimumHeight(72)
-        self._btn_show_slm.setMaximumHeight(76)
-        self._btn_show_slm.setFont(demo_font(23, bold=True))
+        self._btn_show_slm.setMinimumHeight(42)
+        self._btn_show_slm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self._btn_show_slm.setFont(demo_font(15, weight=QFont.DemiBold))
         self._btn_show_slm.clicked.connect(self._toggle_slm_window)
-        sl.addWidget(self._btn_show_slm, 0, 0, 1, 3)
-
-        sl.addWidget(QLabel("SLM screen:"), 1, 0)
-        self._combo_slm_screen = QComboBox()
-        self._combo_slm_screen.setMinimumHeight(38)
-        sl.addWidget(self._combo_slm_screen, 1, 1)
-
-        self._btn_refresh_screens = QPushButton("Refresh")
-        self._btn_refresh_screens.setMinimumHeight(38)
-        self._btn_refresh_screens.clicked.connect(self._refresh_screen_list)
-        sl.addWidget(self._btn_refresh_screens, 1, 2)
-
-        self._chk_slm_fullscreen = QCheckBox("Fullscreen on selected screen")
-        self._chk_slm_fullscreen.setChecked(True)
-        sl.addWidget(self._chk_slm_fullscreen, 2, 0, 1, 3)
-
-        self._btn_move_slm = QPushButton("Move SLM to Selected Screen")
-        self._btn_move_slm.setMinimumHeight(40)
-        self._btn_move_slm.clicked.connect(self._move_slm_to_selected_screen)
-        sl.addWidget(self._btn_move_slm, 3, 0, 1, 3)
-
-        self._btn_test_slm = QPushButton("Test SLM Output")
-        self._btn_test_slm.setMinimumHeight(40)
-        self._btn_test_slm.setToolTip(
-            "Draw a built-in SLM TEST pattern with Qt. "
-            "Use to verify the external display path on macOS."
-        )
-        self._btn_test_slm.clicked.connect(self._test_slm_output)
-        sl.addWidget(self._btn_test_slm, 4, 0, 1, 3)
-
-        self._lbl_screen_hint = QLabel("Detected displays: checking...")
-        self._lbl_screen_hint.setObjectName("demoHintLabel")
-        self._lbl_screen_hint.setWordWrap(True)
-        sl.addWidget(self._lbl_screen_hint, 5, 0, 1, 3)
-        slm_outer.addLayout(sl)
-        layout.addWidget(slm_box)
-
-        ch_box = QGroupBox("")
-        style_control_section(ch_box)
-        ch_outer = QVBoxLayout(ch_box)
-        ch_outer.setSpacing(8)
-        ch_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(ch_outer, "Challenge controls")
-        ch = QGridLayout()
-        ch.setSpacing(8)
-        ch.setContentsMargins(4, 0, 4, 4)
-
-        ch.addWidget(QLabel("Type:"), 0, 0)
-        self._combo_challenge_type = QComboBox()
-        self._combo_challenge_type.setMinimumHeight(38)
-        self._combo_challenge_type.addItems(["Text", "Image"])
-        self._combo_challenge_type.currentTextChanged.connect(self._on_challenge_type_changed)
-        ch.addWidget(self._combo_challenge_type, 0, 1)
-
-        self._input_letter = QLineEdit("A")
-        self._input_letter.setMaxLength(64)
-        self._input_letter.setMinimumHeight(38)
-        self._input_letter.setPlaceholderText("A, B, 1, boy_avatar")
-        self._input_letter.textChanged.connect(self._on_challenge_text_changed)
-        ch.addWidget(self._input_letter, 0, 2)
-
-        self._btn_send_slm = QPushButton("Send to SLM")
-        self._btn_send_slm.setMinimumHeight(40)
-        self._btn_send_slm.clicked.connect(self._send_to_slm)
-        ch.addWidget(self._btn_send_slm, 1, 0, 1, 3)
-
-        self._btn_prev = QPushButton("◀ Prev")
-        self._btn_next = QPushButton("Next ▶")
-        self._btn_prev.setMinimumHeight(38)
-        self._btn_next.setMinimumHeight(38)
-        self._btn_prev.clicked.connect(self._prev_challenge)
-        self._btn_next.clicked.connect(self._next_challenge)
-        ch.addWidget(self._btn_prev, 2, 0, 1, 2)
-        ch.addWidget(self._btn_next, 2, 2)
-
-        self._btn_load_img = QPushButton("Load Image to SLM")
-        self._btn_load_img.setMinimumHeight(38)
-        self._btn_load_img.setToolTip(
-            "Load a PNG/JPG/BMP for PPT exports, avatars, or custom patterns."
-        )
-        self._btn_load_img.clicked.connect(self._load_image_to_slm)
-        ch.addWidget(self._btn_load_img, 3, 0, 1, 3)
+        layout.addWidget(self._btn_show_slm)
 
         self._btn_load_challenge_set = QPushButton("Load Challenge Set")
-        self._btn_load_challenge_set.setMinimumHeight(38)
+        self._btn_load_challenge_set.setMinimumHeight(42)
+        self._btn_load_challenge_set.setFont(demo_font(15))
         self._btn_load_challenge_set.setToolTip(
             "Reload challenge_inputs/manifest.json (exported from input.pptx)."
         )
         self._btn_load_challenge_set.clicked.connect(self._reload_challenge_manifest)
-        ch.addWidget(self._btn_load_challenge_set, 4, 0, 1, 3)
-
-        self._spin_font = QSpinBox()
-        self._spin_font.setRange(50, 800)
-        self._spin_font.setValue(400)
-        self._spin_font.setMinimumHeight(38)
-        self._spin_font.setSingleStep(20)
-        self._spin_font.valueChanged.connect(self._on_font_size_changed)
-        ch.addWidget(QLabel("Font size:"), 5, 0)
-        ch.addWidget(self._spin_font, 5, 1)
-
-        self._chk_slm_stretch = QCheckBox("Stretch to fill")
-        self._chk_slm_stretch.setChecked(True)
-        self._chk_slm_stretch.toggled.connect(self._on_slm_stretch_toggled)
-        ch.addWidget(self._chk_slm_stretch, 5, 2)
-        ch_outer.addLayout(ch)
-        layout.addWidget(ch_box)
+        layout.addWidget(self._btn_load_challenge_set)
 
         fiber_box = QGroupBox("")
         style_control_section(fiber_box)
         fiber_outer = QVBoxLayout(fiber_box)
         fiber_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(fiber_outer, "Authorized model")
+        add_card_title(fiber_outer, "Connected fiber")
         fl = QGridLayout()
-        fl.setSpacing(6)
+        fl.setSpacing(8)
         fl.setContentsMargins(4, 0, 4, 4)
 
-        fl.addWidget(QLabel("Authorized model:"), 0, 0)
+        lbl_fiber = QLabel("Connected fiber:")
+        lbl_fiber.setFont(demo_font(15, weight=QFont.DemiBold))
+        fl.addWidget(lbl_fiber, 0, 0)
         self._combo_fiber = QComboBox()
-        self._combo_fiber.setToolTip("Enrolled fiber bundle used for speckle recognition.")
+        self._combo_fiber.setMinimumHeight(44)
+        self._combo_fiber.setFont(demo_font(16))
+        self._combo_fiber.setToolTip(
+            "Select the fiber connected to the setup; the matching FiberN.pth loads automatically."
+        )
         self._combo_fiber.currentIndexChanged.connect(self._on_fiber_selected)
         fl.addWidget(self._combo_fiber, 0, 1)
 
         self._btn_refresh_fiber = QPushButton("Refresh")
-        self._btn_refresh_fiber.setFixedWidth(78)
+        self._btn_refresh_fiber.setFixedWidth(84)
+        self._btn_refresh_fiber.setMinimumHeight(44)
         self._btn_refresh_fiber.clicked.connect(self._refresh_fiber_list)
         fl.addWidget(self._btn_refresh_fiber, 0, 2)
 
-        self._lbl_model_path = QLabel("")
-        self._lbl_model_path.setWordWrap(True)
-        self._lbl_model_path.setObjectName("demoHintLabel")
-        self._lbl_model_path.setWordWrap(True)
-        fl.addWidget(self._lbl_model_path, 1, 0, 1, 3)
-
         self._lbl_model_status = QLabel("No model loaded")
         self._lbl_model_status.setObjectName("demoHintLabel")
+        self._lbl_model_status.setFont(demo_font(15, weight=QFont.DemiBold))
         self._lbl_model_status.setWordWrap(True)
-        fl.addWidget(self._lbl_model_status, 2, 0, 1, 3)
+        fl.addWidget(self._lbl_model_status, 1, 0, 1, 3)
+
+        self._lbl_model_path = QLabel("")
+        self._lbl_model_path.setObjectName("demoHintLabel")
+        self._lbl_model_path.setWordWrap(True)
+        self._lbl_model_path.hide()
+        fl.addWidget(self._lbl_model_path, 2, 0, 1, 3)
 
         self._lbl_auth_warning = QLabel("")
         self._lbl_auth_warning.setWordWrap(True)
@@ -767,30 +722,60 @@ class MainWindow(QMainWindow):
         fiber_outer.addLayout(fl)
         layout.addWidget(fiber_box)
 
-        cam_box = QGroupBox("Camera / Video Source")
-        cl = QGridLayout(cam_box)
-        cl.setSpacing(10)
+        cam_box = QGroupBox("")
+        style_control_section(cam_box)
+        cam_outer = QVBoxLayout(cam_box)
+        cam_outer.setContentsMargins(4, 4, 4, 4)
+        add_card_title(cam_outer, "CCD acquisition")
+        cl = QGridLayout()
+        cl.setSpacing(8)
 
         cl.addWidget(QLabel("Camera index:"), 0, 0)
         self._spin_cam_idx = QSpinBox()
         self._spin_cam_idx.setRange(0, 20)
+        self._spin_cam_idx.setMinimumHeight(40)
         cl.addWidget(self._spin_cam_idx, 0, 1)
 
-        self._btn_start_cam = QPushButton("Start Camera")
+        self._btn_start_cam = QPushButton("Start CCD")
         self._btn_start_cam.setObjectName("primary")
+        self._btn_start_cam.setMinimumHeight(48)
+        self._btn_start_cam.setFont(demo_font(16, weight=QFont.Bold))
         self._btn_start_cam.clicked.connect(self._start_camera)
         cl.addWidget(self._btn_start_cam, 0, 2)
 
+        self._btn_stop_cam = QPushButton("Stop")
+        self._btn_stop_cam.setObjectName("danger")
+        self._btn_stop_cam.setMinimumHeight(44)
+        self._btn_stop_cam.setEnabled(False)
+        self._btn_stop_cam.clicked.connect(self._stop_camera)
+        cl.addWidget(self._btn_stop_cam, 1, 2)
+
+        self._btn_load_video = QPushButton("Load Video File")
+        self._btn_load_video.setMinimumHeight(42)
+        self._btn_load_video.clicked.connect(self._load_video_file)
+        cl.addWidget(self._btn_load_video, 1, 0, 1, 2)
+
+        self._btn_start_mv = QPushButton("MindVision CCD (HT-UBS300C)")
+        self._btn_start_mv.setMinimumHeight(42)
+        self._btn_start_mv.setToolTip(
+            "Connect via MindVision SDK (libmvsdk.dylib).\n"
+            "Use this instead of Start CCD for the HT-UBS300C."
+        )
+        self._btn_start_mv.clicked.connect(self._start_mv_camera)
+        cl.addWidget(self._btn_start_mv, 2, 0, 1, 3)
+
         self._btn_scan_cam = QPushButton("Scan Available Cameras")
+        self._btn_scan_cam.setMinimumHeight(38)
         self._btn_scan_cam.setToolTip(
             "Probe indices 0-9 on the main thread.\n"
             "On macOS this also triggers the camera permission dialog."
         )
         self._btn_scan_cam.clicked.connect(self._scan_cameras)
-        cl.addWidget(self._btn_scan_cam, 1, 0, 1, 3)
+        cl.addWidget(self._btn_scan_cam, 3, 0, 1, 3)
 
-        cl.addWidget(QLabel("Resolution:"), 2, 0)
+        cl.addWidget(QLabel("Resolution:"), 4, 0)
         self._combo_cam_res = QComboBox()
+        self._combo_cam_res.setMinimumHeight(40)
         self._combo_cam_res.addItem("Auto (default)", (None, None))
         self._combo_cam_res.addItem("2048×1536", (2048, 1536))
         self._combo_cam_res.addItem("1920×1440", (1920, 1440))
@@ -798,41 +783,102 @@ class MainWindow(QMainWindow):
         self._combo_cam_res.addItem("1024×768",  (1024, 768))
         self._combo_cam_res.addItem("640×480",   (640, 480))
         self._combo_cam_res.setCurrentIndex(1)
-        cl.addWidget(self._combo_cam_res, 2, 1, 1, 2)
-
-        self._btn_stop_cam = QPushButton("Stop")
-        self._btn_stop_cam.setObjectName("danger")
-        self._btn_stop_cam.setEnabled(False)
-        self._btn_stop_cam.clicked.connect(self._stop_camera)
-        cl.addWidget(self._btn_stop_cam, 3, 2)
-
-        self._btn_load_video = QPushButton("Load Video File")
-        self._btn_load_video.clicked.connect(self._load_video_file)
-        cl.addWidget(self._btn_load_video, 3, 0, 1, 2)
-
-        # ── MindVision CCD (HT-UBS300C) via vendor SDK ──────────────────────
-        self._btn_start_mv = QPushButton("MindVision CCD (HT-UBS300C)")
-        self._btn_start_mv.setObjectName("primary")
-        self._btn_start_mv.setToolTip(
-            "Connect via MindVision SDK (libmvsdk.dylib).\n"
-            "Use this instead of 'Start Camera' for the HT-UBS300C."
-        )
-        self._btn_start_mv.clicked.connect(self._start_mv_camera)
-        cl.addWidget(self._btn_start_mv, 4, 0, 1, 3)
+        cl.addWidget(self._combo_cam_res, 4, 1, 1, 2)
 
         self._lbl_source = QLabel("No source")
-        self._lbl_source.setStyleSheet("color: #888; font-size: 11px;")
+        self._lbl_source.setObjectName("demoHintLabel")
         self._lbl_source.setWordWrap(True)
         cl.addWidget(self._lbl_source, 5, 0, 1, 3)
+        cam_outer.addLayout(cl)
         layout.addWidget(cam_box)
         self._group_camera_video = cam_box
 
-        layout.addWidget(self._build_cam_settings_box())
+        self._advanced_slm_box = QGroupBox("Advanced SLM settings")
+        self._advanced_slm_box.setCheckable(True)
+        self._advanced_slm_box.setChecked(False)
+        self._advanced_slm_box.setStyleSheet(
+            "QGroupBox { font-weight: 600; color: #636366; }"
+        )
+        adv_outer = QVBoxLayout(self._advanced_slm_box)
+        sl = QGridLayout()
+        sl.setSpacing(6)
+
+        sl.addWidget(QLabel("SLM screen:"), 0, 0)
+        self._combo_slm_screen = QComboBox()
+        self._combo_slm_screen.setMinimumHeight(36)
+        sl.addWidget(self._combo_slm_screen, 0, 1)
+        self._btn_refresh_screens = QPushButton("Refresh")
+        self._btn_refresh_screens.clicked.connect(self._refresh_screen_list)
+        sl.addWidget(self._btn_refresh_screens, 0, 2)
+
+        self._chk_slm_fullscreen = QCheckBox("Fullscreen on selected screen")
+        self._chk_slm_fullscreen.setChecked(True)
+        sl.addWidget(self._chk_slm_fullscreen, 1, 0, 1, 3)
+
+        self._btn_move_slm = QPushButton("Move SLM to Selected Screen")
+        self._btn_move_slm.clicked.connect(self._move_slm_to_selected_screen)
+        sl.addWidget(self._btn_move_slm, 2, 0, 1, 3)
+
+        self._btn_test_slm = QPushButton("Test SLM Output")
+        self._btn_test_slm.setToolTip(
+            "Draw a built-in SLM TEST pattern with Qt. "
+            "Use to verify the external display path on macOS."
+        )
+        self._btn_test_slm.clicked.connect(self._test_slm_output)
+        sl.addWidget(self._btn_test_slm, 3, 0, 1, 3)
+
+        self._spin_font = QSpinBox()
+        self._spin_font.setRange(50, 800)
+        self._spin_font.setValue(400)
+        self._spin_font.setSingleStep(20)
+        self._spin_font.valueChanged.connect(self._on_font_size_changed)
+        sl.addWidget(QLabel("Font size:"), 4, 0)
+        sl.addWidget(self._spin_font, 4, 1)
+
+        self._chk_slm_stretch = QCheckBox("Stretch to fill")
+        self._chk_slm_stretch.setChecked(True)
+        self._chk_slm_stretch.toggled.connect(self._on_slm_stretch_toggled)
+        sl.addWidget(self._chk_slm_stretch, 4, 2)
+
+        self._lbl_screen_hint = QLabel("Detected displays: checking...")
+        self._lbl_screen_hint.setObjectName("demoHintLabel")
+        self._lbl_screen_hint.setWordWrap(True)
+        sl.addWidget(self._lbl_screen_hint, 5, 0, 1, 3)
+
+        sl.addWidget(QLabel("Challenge type:"), 6, 0)
+        self._combo_challenge_type = QComboBox()
+        self._combo_challenge_type.addItems(["Text", "Image"])
+        self._combo_challenge_type.currentTextChanged.connect(self._on_challenge_type_changed)
+        sl.addWidget(self._combo_challenge_type, 6, 1)
+
+        self._input_letter = QLineEdit("")
+        self._input_letter.setMaxLength(64)
+        self._input_letter.setPlaceholderText("A, B, 1, boy")
+        self._input_letter.textChanged.connect(self._on_challenge_text_changed)
+        sl.addWidget(self._input_letter, 6, 2)
+
+        self._btn_load_img = QPushButton("Load Image to SLM")
+        self._btn_load_img.setToolTip(
+            "Load a PNG/JPG/BMP for PPT exports, avatars, or custom patterns."
+        )
+        self._btn_load_img.clicked.connect(self._load_image_to_slm)
+        sl.addWidget(self._btn_load_img, 7, 0, 1, 3)
+
+        adv_outer.addLayout(sl)
+        layout.addWidget(self._advanced_slm_box)
+
+        self._advanced_cam_box = QGroupBox("Advanced camera / inference")
+        self._advanced_cam_box.setCheckable(True)
+        self._advanced_cam_box.setChecked(False)
+        self._advanced_cam_box.setStyleSheet(
+            "QGroupBox { font-weight: 600; color: #636366; }"
+        )
+        adv_cam_layout = QVBoxLayout(self._advanced_cam_box)
+        adv_cam_layout.addWidget(self._build_cam_settings_box())
 
         inf_box = QGroupBox("Inference Settings")
         il = QGridLayout(inf_box)
-        il.setSpacing(10)
-
+        il.setSpacing(8)
         il.addWidget(QLabel("Infer every N frames:"), 0, 0)
         self._spin_infer_every = QSpinBox()
         self._spin_infer_every.setRange(1, 30)
@@ -841,7 +887,6 @@ class MainWindow(QMainWindow):
             lambda v: self._infer_worker.set_infer_every(v)
         )
         il.addWidget(self._spin_infer_every, 0, 1)
-
         il.addWidget(QLabel("Vote window:"), 1, 0)
         self._spin_vote = QSpinBox()
         self._spin_vote.setRange(1, 30)
@@ -850,11 +895,11 @@ class MainWindow(QMainWindow):
             lambda v: self._infer_worker.set_vote_window(v)
         )
         il.addWidget(self._spin_vote, 1, 1)
-
         self._chk_infer_active = QCheckBox("Recognition active")
         self._chk_infer_active.setChecked(True)
         il.addWidget(self._chk_infer_active, 2, 0, 1, 2)
-        layout.addWidget(inf_box)
+        adv_cam_layout.addWidget(inf_box)
+        layout.addWidget(self._advanced_cam_box)
 
         layout.addStretch()
         return container
@@ -980,36 +1025,30 @@ class MainWindow(QMainWindow):
         self._infer_worker.error.connect(self._on_infer_error)
 
     def _refresh_fiber_list(self) -> None:
-        """Populate Authorized fiber combo and load the selected Fiber*.pth model."""
-        self._fiber_models = discover_fiber_models()
+        """Populate connected-fiber combo (Fiber1–Fiber15) and load FiberN.pth."""
+        discovered = discover_fiber_models()
         prev = self._combo_fiber.currentText() if hasattr(self, "_combo_fiber") else ""
         self._combo_fiber.blockSignals(True)
         self._combo_fiber.clear()
 
-        if self._fiber_models:
-            names = sorted(self._fiber_models.keys(), key=_fiber_natural_sort_key)
-            for name in names:
-                self._combo_fiber.addItem(name)
-            self._log(f"Found fiber models: {names}")
+        names = all_fiber_names()
+        self._fiber_models = {}
+        for name in names:
+            path = discovered.get(name) or fiber_model_path(name)
+            self._fiber_models[name] = path
+            self._combo_fiber.addItem(name)
+
+        found = [n for n in names if os.path.isfile(self._fiber_models[n])]
+        if found:
+            self._log(f"Fiber models available: {found}")
         else:
-            self._log(f"[WARNING] No fiber models in {FIBER_MODELS_DIR}")
-            self._log("  Run: python -u scripts/fiber_auth_eval.py")
-            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
-            self._lbl_model_status.setText("No Fiber*.pth checkpoints found")
-            self._lbl_model_path.setText("")
-            self._lbl_model.setText("Model: none")
-            self._active_fiber = ""
+            self._log(f"[WARNING] No Fiber*.pth in {FIBER_MODELS_DIR}")
 
         env_name = os.environ.get("SPECKLE_DEFAULT_FIBER", "").strip()
         if env_name and self._combo_fiber.findText(env_name) >= 0:
             self._combo_fiber.setCurrentText(env_name)
         elif prev and self._combo_fiber.findText(prev) >= 0:
             self._combo_fiber.setCurrentText(prev)
-        elif env_name and self._fiber_models:
-            self._log(
-                f"[WARNING] SPECKLE_DEFAULT_FIBER={env_name!r} not found; "
-                f"using {self._combo_fiber.itemText(0)!r}."
-            )
 
         self._combo_fiber.blockSignals(False)
 
@@ -1023,27 +1062,25 @@ class MainWindow(QMainWindow):
         fiber = self._combo_fiber.currentText()
         if not fiber:
             return
-        if not self._fiber_models:
-            self._fiber_models = discover_fiber_models()
-        path = self._fiber_models.get(fiber)
-        if not path or not os.path.isfile(path):
-            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
-            self._lbl_model_status.setText(f"Model not found for {fiber}")
-            self._lbl_model_path.setText("")
+        path = self._fiber_models.get(fiber) or fiber_model_path(fiber)
+        rel = os.path.join("models", "final_15fibers", f"{fiber}.pth")
+        if not os.path.isfile(path):
+            self._lbl_model_status.setStyleSheet("color: #e06c75;")
+            self._lbl_model_status.setText(f"Model file missing: {rel}")
             self._lbl_model.setText("Model: missing")
             self._active_fiber = ""
+            self._log(f"[WARNING] Model file missing: {path}")
             return
 
         self._active_fiber = fiber
-        self._lbl_model_path.setText(os.path.basename(path))
-        self._lbl_model_status.setStyleSheet("color: #a0c4ff; font-size: 11px;")
-        self._lbl_model_status.setText(f"Loading {fiber} …")
+        self._lbl_model_status.setStyleSheet("color: #a0c4ff;")
+        self._lbl_model_status.setText(f"Loading: {fiber} …")
         self._lbl_model.setText(f"Model: loading {fiber}…")
-        self._log(f"Loading model for {fiber} ({os.path.basename(path)}) …")
+        self._log(f"Loading connected fiber model {fiber} ({rel}) …")
         ok = self._infer_worker.load_model(path)
         if not ok:
-            self._lbl_model_status.setStyleSheet("color: #e06c75; font-size: 11px;")
-            self._lbl_model_status.setText("Load failed")
+            self._lbl_model_status.setStyleSheet("color: #e06c75;")
+            self._lbl_model_status.setText(f"Load failed: {fiber}")
             self._lbl_model.setText("Model: load failed")
             self._log("[ERROR] Model load failed")
 
@@ -1122,8 +1159,6 @@ class MainWindow(QMainWindow):
             self._slm_window.diagnostic_log.connect(self._log)
             self._slm_window.set_font_size(self._spin_font.value())
             self._slm_window.set_stretch(self._chk_slm_stretch.isChecked())
-            letter = self._input_letter.text().strip() or "A"
-            self._slm_window.set_text_challenge(letter)
         return self._slm_window
 
     def _show_slm_on_selected_screen(self, *, force_show=True):
@@ -1208,11 +1243,14 @@ class MainWindow(QMainWindow):
             return
         t = text.strip()
         if t:
-            self._challenge_preview.set_text_challenge(t, source="text")
+            self._apply_challenge_label(t, source="text")
         else:
-            self._challenge_preview.clear_challenge()
-        if self._slm_window and self._slm_window.isVisible() and t:
-            self._slm_window.set_text_challenge(t)
+            self.current_challenge_label = None
+            self._challenge_image_path = None
+            if self._manifest_loaded:
+                self._challenge_preview.set_manifest_ready(len(self._challenge_cycle))
+            else:
+                self._challenge_preview.clear_challenge()
 
     def _sync_challenge_cycle_index(self, label: str) -> None:
         if label in self._challenge_cycle:
@@ -1226,49 +1264,75 @@ class MainWindow(QMainWindow):
         image_path: Optional[str] = None,
         send_slm: bool = False,
     ) -> None:
-        self.current_challenge_label = label.strip()
+        """Update left preview selection only (not recognition / SLM)."""
+        selected = label.strip()
+        if not selected:
+            return
+        self.current_challenge_label = selected
         self._challenge_source = source
         self._challenge_image_path = image_path
-        self._sync_challenge_cycle_index(self.current_challenge_label)
+        self._sync_challenge_cycle_index(selected)
+        self._input_letter.blockSignals(True)
+        self._input_letter.setText(selected)
+        self._input_letter.blockSignals(False)
+        self._log(f"Challenge selected: {selected}")
 
         if source == "image" and image_path:
             self._combo_challenge_type.blockSignals(True)
             self._combo_challenge_type.setCurrentText("Image")
             self._combo_challenge_type.blockSignals(False)
-            self._challenge_preview.set_image_challenge(image_path, self.current_challenge_label)
+            self._challenge_preview.set_image_challenge(image_path, selected)
         else:
             self._combo_challenge_type.blockSignals(True)
             self._combo_challenge_type.setCurrentText("Text")
             self._combo_challenge_type.blockSignals(False)
-            self._input_letter.setText(self.current_challenge_label)
-            self._challenge_preview.set_text_challenge(
-                self.current_challenge_label, source=source
-            )
-
-        self._display_smoother.reset()
-        self._hide_overlay_banner()
-        self._recognition_result.set_waiting(self.current_challenge_label)
-        self._robot_panel.set_challenge_label(self.current_challenge_label)
-        self._robot_panel.on_idle()
+            self._challenge_preview.set_text_challenge(selected, source=source)
 
         if send_slm:
             self._push_challenge_to_slm()
 
-    def _push_challenge_to_slm(self) -> None:
-        win = self._ensure_slm_window()
-        if self._challenge_source == "image" and self._challenge_image_path:
-            if not win.load_image(self._challenge_image_path):
-                self._log(f"[ERROR] Could not load image on SLM: {self._challenge_image_path}")
-                return
-        else:
-            win.set_text_challenge(self.current_challenge_label)
-            diag = win.png_load_diagnostic()
-            if diag:
-                self._log(f"[SLM] {diag}")
-            p = win.last_letter_png_path()
-            if p:
-                self._log(f"[SLM] Using image file: {p}")
+    def _activate_auth_challenge(self, label: str) -> None:
+        """Recognition compares against the challenge successfully sent to the SLM."""
+        self.last_sent_challenge_label = label.strip()
+        self._display_smoother.reset()
+        self._hide_overlay_banner()
+        self._recognition_result.set_waiting(self.last_sent_challenge_label)
+        self._robot_panel.set_challenge_label(self.last_sent_challenge_label)
+        self._robot_panel.on_idle()
 
+    def _push_challenge_to_slm(self) -> bool:
+        label = (self.current_challenge_label or "").strip()
+        if not label:
+            return False
+        win = self._ensure_slm_window()
+        img_path = self._challenge_image_path or self._resolve_challenge_image_path(label)
+
+        if img_path and os.path.isfile(img_path):
+            abs_path = os.path.abspath(img_path)
+            self._log(f"SLM image path: {abs_path}")
+            if not win.load_image(abs_path):
+                self._log(f"[ERROR] Could not load image on SLM: {abs_path}")
+                return False
+        else:
+            from gui.slm_window import _find_challenge_png
+
+            resolved = _find_challenge_png(label)
+            if resolved and os.path.isfile(resolved):
+                abs_path = os.path.abspath(resolved)
+                self._log(f"SLM image path: {abs_path}")
+                if not win.load_image(abs_path):
+                    self._log(f"[ERROR] Could not load image on SLM: {abs_path}")
+                    return False
+            else:
+                win.set_text_challenge(label)
+                diag = win.png_load_diagnostic()
+                if diag:
+                    self._log(f"[SLM] {diag}")
+                p = win.last_letter_png_path()
+                if p:
+                    self._log(f"SLM image path: {p}")
+
+        self._log(f"Challenge sent to SLM: {label}")
         self._show_slm_on_selected_screen(force_show=True)
         self._btn_show_slm.setText("Hide SLM Window")
         win.raise_()
@@ -1276,46 +1340,40 @@ class MainWindow(QMainWindow):
         win.repaint()
         win.update()
         win.force_visual_refresh()
+        return True
 
     def _send_to_slm(self):
-        if self._is_image_challenge_mode():
-            if not self._challenge_image_path:
-                self._log("[SLM] Load an image challenge first, then click Send to SLM.")
-                QMessageBox.information(
-                    self,
-                    "SLM",
-                    "Load an image challenge (Load Image to SLM), then click Send to SLM.",
-                )
-                return
-            label = self.current_challenge_label or os.path.splitext(
-                os.path.basename(self._challenge_image_path)
-            )[0]
-            self._apply_challenge_label(
-                label, source="image", image_path=self._challenge_image_path, send_slm=False
+        if not self._has_challenge_selected():
+            self._log(
+                "No challenge selected. Select a challenge before sending to SLM."
             )
+            QMessageBox.information(
+                self,
+                "SLM",
+                "No challenge selected.\n\n"
+                "Use Prev/Next to choose a challenge, then click Send to SLM.",
+            )
+            return
+
+        label = self.current_challenge_label.strip()
+        img_path = self._challenge_image_path or self._resolve_challenge_image_path(label)
+        if img_path:
+            self._challenge_source = "image"
+            self._challenge_image_path = img_path
         else:
-            text = self._input_letter.text().strip()
-            if not text:
-                self._log("[SLM] Challenge text is empty.")
-                QMessageBox.information(
-                    self,
-                    "SLM",
-                    "Enter a text challenge (letter, digit, or label), then click Send to SLM.",
-                )
-                return
-            self._apply_challenge_label(text, source="text", send_slm=False)
+            self._challenge_source = "text"
+            self._challenge_image_path = None
 
         idx = self._combo_slm_screen.currentData()
         screen = self._selected_screen()
         name = screen.name() if screen else "?"
         self._log(
-            f"[SLM] Send pipeline: challenge={self.current_challenge_label!r}, "
+            f"[SLM] Send pipeline: challenge={label!r}, "
             f"source={self._challenge_source}, screen_index={idx}, screen_name={name!r}"
         )
-        self._recognition_result.set_waiting(self.current_challenge_label)
-        self._robot_panel.set_challenge_label(self.current_challenge_label)
-        self._push_challenge_to_slm()
-        self._log(f"Challenge sent to SLM: {self.current_challenge_label}")
+        if not self._push_challenge_to_slm():
+            return
+        self._activate_auth_challenge(label)
 
     def _on_font_size_changed(self, size: int):
         if self._slm_window:
@@ -1328,26 +1386,42 @@ class MainWindow(QMainWindow):
     def _prev_challenge(self):
         if not self._challenge_cycle:
             self._challenge_cycle = self._discover_challenge_cycle()
+        if not self._challenge_cycle:
+            return
         n = len(self._challenge_cycle)
-        self._challenge_cycle_index = (self._challenge_cycle_index - 1) % n
+        if self._challenge_cycle_index < 0:
+            self._challenge_cycle_index = n - 1
+            self._log(
+                f"Challenge navigation: Prev from none -> last ({self._challenge_cycle[-1]})"
+            )
+        else:
+            self._challenge_cycle_index = (self._challenge_cycle_index - 1) % n
         label = self._challenge_cycle[self._challenge_cycle_index]
         img_path = self._resolve_challenge_image_path(label)
         if img_path:
-            self._apply_challenge_label(label, source="image", image_path=img_path, send_slm=True)
+            self._apply_challenge_label(label, source="image", image_path=img_path)
         else:
-            self._apply_challenge_label(label, source="text", send_slm=True)
+            self._apply_challenge_label(label, source="text")
 
     def _next_challenge(self):
         if not self._challenge_cycle:
             self._challenge_cycle = self._discover_challenge_cycle()
+        if not self._challenge_cycle:
+            return
         n = len(self._challenge_cycle)
-        self._challenge_cycle_index = (self._challenge_cycle_index + 1) % n
+        if self._challenge_cycle_index < 0:
+            self._challenge_cycle_index = 0
+            self._log(
+                f"Challenge navigation: Next from none -> first ({self._challenge_cycle[0]})"
+            )
+        else:
+            self._challenge_cycle_index = (self._challenge_cycle_index + 1) % n
         label = self._challenge_cycle[self._challenge_cycle_index]
         img_path = self._resolve_challenge_image_path(label)
         if img_path:
-            self._apply_challenge_label(label, source="image", image_path=img_path, send_slm=True)
+            self._apply_challenge_label(label, source="image", image_path=img_path)
         else:
-            self._apply_challenge_label(label, source="text", send_slm=True)
+            self._apply_challenge_label(label, source="text")
 
     def _resolve_challenge_image_path(self, label: str) -> Optional[str]:
         from gui.slm_window import _find_challenge_png
@@ -1373,11 +1447,9 @@ class MainWindow(QMainWindow):
         if not path:
             return
 
-        win = self._ensure_slm_window()
         label = os.path.splitext(os.path.basename(path))[0]
-        self._apply_challenge_label(label, source="image", image_path=path, send_slm=True)
-        self._log(f"Challenge sent to SLM: {self.current_challenge_label}")
-        self._log(f"SLM: image loaded -> {os.path.basename(path)}")
+        self._apply_challenge_label(label, source="image", image_path=path, send_slm=False)
+        self._log(f"Challenge selected: {label} (custom image — click Send to SLM)")
 
     def _build_cam_settings_box(self) -> QGroupBox:
         box = QGroupBox("Camera Settings")
@@ -2008,7 +2080,7 @@ class MainWindow(QMainWindow):
         self._lbl_fps.setText("FPS: --")
         self._set_cam_controls_enabled(False)
         self._robot_panel.on_idle()
-        self._recognition_result.set_waiting(self.current_challenge_label)
+        self._recognition_result.set_waiting(self._auth_challenge_label())
         self._cam_glow.setBlurRadius(0)
         self._overlay_banner.hide()
         self._log("Camera stopped.")
@@ -2054,7 +2126,7 @@ class MainWindow(QMainWindow):
                 conf_f = None
 
         feed = self._display_smoother.feed(
-            challenge=self.current_challenge_label,
+            challenge=self._auth_challenge_label(),
             raw_label=pred_label,
             raw_confidence=conf_f,
         )
@@ -2082,7 +2154,7 @@ class MainWindow(QMainWindow):
         else:
             self._lbl_auth_warning.setVisible(False)
 
-        self._robot_panel.set_challenge_label(self.current_challenge_label)
+        self._robot_panel.set_challenge_label(self._auth_challenge_label())
         self._robot_panel.apply_decision(
             snap.decision,
             predicted=snap.predicted,
@@ -2100,7 +2172,8 @@ class MainWindow(QMainWindow):
             self._hide_overlay_banner()
 
         from PySide6.QtCore import QTimer as _QTimer
-        _QTimer.singleShot(2200, lambda: self._cam_glow.setBlurRadius(0))
+        glow_ms = int(max(2000, self._display_smoother.banner_hold_sec * 1000))
+        _QTimer.singleShot(glow_ms, lambda: self._cam_glow.setBlurRadius(0))
 
     def _hide_overlay_banner(self) -> None:
         self._banner_hide_timer.stop()

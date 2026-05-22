@@ -57,7 +57,7 @@ class ChallengePreviewWidget(QGroupBox):
     """Compact left-column preview of the current SLM challenge pattern."""
 
     PREVIEW_MIN_H = 150
-    PREVIEW_MAX_H = 180
+    PREVIEW_MAX_H = 175
     EMPTY_PLACEHOLDER_MAX_PT = 30
     EMPTY_PLACEHOLDER_MIN_PT = 28
     EMPTY_PLACEHOLDER_SIDE_MARGIN = 28
@@ -88,10 +88,10 @@ class ChallengePreviewWidget(QGroupBox):
         current_row.setSpacing(6)
         self._lbl_current_prefix = QLabel("Current challenge:")
         self._lbl_current_prefix.setObjectName("challengeCurrentLabel")
-        self._lbl_current_prefix.setFont(demo_font(23, bold=True))
+        self._lbl_current_prefix.setFont(demo_font(24, bold=True))
         self._lbl_current_value = QLabel("—")
         self._lbl_current_value.setObjectName("challengeCurrentValue")
-        self._lbl_current_value.setFont(demo_font(32, weight=QFont.Black))
+        self._lbl_current_value.setFont(demo_font(36, weight=QFont.Black))
         current_row.addWidget(self._lbl_current_prefix)
         current_row.addWidget(self._lbl_current_value, stretch=1)
         current_row.addStretch()
@@ -197,6 +197,20 @@ class ChallengePreviewWidget(QGroupBox):
         self._lbl_current_value.setText("—")
         self._lbl_source.setText("Source: —")
 
+    def set_manifest_ready(self, item_count: int = 0) -> None:
+        """Manifest loaded in memory; no challenge selected yet."""
+        self._label = ""
+        self._source = "manifest"
+        self._pixmap = None
+        self._show_empty_placeholder()
+        self._lbl_current_value.setText("—")
+        if item_count > 0:
+            self._lbl_source.setText(
+                f"Source: challenge set loaded ({item_count} items)"
+            )
+        else:
+            self._lbl_source.setText("Source: challenge set loaded")
+
     def set_text_challenge(self, label: str, *, source: str = "text") -> None:
         text = _normalize_label(label)
         if not text:
@@ -210,7 +224,7 @@ class ChallengePreviewWidget(QGroupBox):
         self._preview.setText("")
         self._render_text_preview(text)
         QTimer.singleShot(0, lambda t=text: self._render_text_preview(t))
-        self._lbl_current_value.setText(text)
+        self._lbl_current_value.setText((label or text).strip())
         self._lbl_source.setText(f"Source: {self._source}")
 
     def set_image_challenge(self, path: str, label: Optional[str] = None) -> None:
@@ -232,7 +246,8 @@ class ChallengePreviewWidget(QGroupBox):
             self._pixmap = pix
             self._preview.setText("")
             self._scale_preview_pixmap()
-        self._lbl_current_value.setText(text)
+        display = (label or stem).strip()
+        self._lbl_current_value.setText(display)
         self._lbl_source.setText(f"Source: image ({os.path.basename(path)})")
 
     def resizeEvent(self, event):
@@ -275,9 +290,9 @@ class RecognitionResultWidget(QGroupBox):
 
     CARD_MIN_H = 280
     BODY_MIN_H = 240
-    ROW_LABEL_PX = 17
-    ROW_VALUE_PX = 20
-    STATUS_FONT_PX = 24
+    ROW_LABEL_PX = 18
+    ROW_VALUE_PX = 22
+    STATUS_FONT_PX = 26
 
     def __init__(self, parent=None):
         super().__init__("", parent)

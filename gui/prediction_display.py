@@ -53,12 +53,14 @@ class PredictionDisplaySmoother:
         self,
         *,
         confidence_threshold: float = 0.60,
-        hold_sec: float = 1.0,
-        banner_hold_sec: float = 1.25,
+        hold_sec: float = 2.0,
+        banner_hold_sec: float = 2.0,
+        granted_release_hold_sec: float = 2.0,
     ) -> None:
         self.confidence_threshold = confidence_threshold
         self.hold_sec = hold_sec
         self.banner_hold_sec = banner_hold_sec
+        self.granted_release_hold_sec = granted_release_hold_sec
         self._buffer: Deque[tuple[str, Optional[float], float]] = deque(
             maxlen=self.BUFFER_SIZE
         )
@@ -257,7 +259,15 @@ class PredictionDisplaySmoother:
             self._pending_since = now
             return _FeedResult(self._displayed, refresh_ui=False)
 
-        if now - self._pending_since >= self.hold_sec:
+        required_hold = self.hold_sec
+        if (
+            self._displayed is not None
+            and self._displayed.decision == "ACCESS GRANTED"
+            and candidate.decision != "ACCESS GRANTED"
+        ):
+            required_hold = max(self.hold_sec, self.granted_release_hold_sec)
+
+        if now - self._pending_since >= required_hold:
             self._displayed = candidate
             self._pending = None
             return _FeedResult(candidate, refresh_ui=True)

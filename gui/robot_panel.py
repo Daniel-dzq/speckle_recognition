@@ -159,6 +159,7 @@ class RobotPanel(QFrame):
     # ═══════════════════════════════════════════════════════
 
     def on_idle(self):
+        self._reset_robot_visual_flags()
         self._set_glow(COLOR_NEUTRAL)
         self.robot.set_state_color(QColor(COLOR_NEUTRAL))
         self.robot.set_expression("happy")
@@ -171,6 +172,7 @@ class RobotPanel(QFrame):
         self._fit_status_heading_font()
 
     def on_reading(self, fiber_name: str = ""):
+        self._reset_robot_visual_flags()
         self._set_glow(COLOR_READING)
         self.robot.set_state_color(QColor(COLOR_READING))
         self.robot.set_expression("scanning")
@@ -277,7 +279,14 @@ class RobotPanel(QFrame):
     # Internal — state transitions + animations
     # ═══════════════════════════════════════════════════════
 
+    def _reset_robot_visual_flags(self) -> None:
+        """Clear sweat/warning carry-over from a previous VERIFY or DENIED state."""
+        self._anims = []
+        self.robot.set_sweat_alpha(0.0)
+        self.robot.set_pose_offset(0.0, 0.0, 0.0)
+
     def _do_authorize(self, letter: str, conf: float):
+        self._reset_robot_visual_flags()
         self.lbl_conf.setStyleSheet("")
         self._set_glow(COLOR_OK)
         self.robot.set_state_color(QColor(COLOR_OK))
@@ -300,6 +309,7 @@ class RobotPanel(QFrame):
 
     def _do_verify(self, reason: str):
         """Label matches but confidence is below threshold — warning / standby."""
+        self._reset_robot_visual_flags()
         self._set_glow(COLOR_WARN)
         self.robot.set_state_color(QColor(COLOR_WARN))
         self.robot.set_expression("scanning")
@@ -312,6 +322,7 @@ class RobotPanel(QFrame):
             self._banner_callback("", COLOR_WARN)
 
     def _do_deny(self, reason: str):
+        self._reset_robot_visual_flags()
         self.lbl_conf.setStyleSheet("")
         self._set_glow(COLOR_FAIL)
         self.robot.set_state_color(QColor(COLOR_FAIL))

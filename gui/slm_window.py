@@ -203,7 +203,8 @@ class SLMWindow(QWidget):
             # Helps some external panels / secondary-GPU paths flush a real framebuffer.
             self.setAttribute(Qt.WidgetAttribute.WA_NativeWindow, True)
         self._apply_colors()
-        self.set_letter("A")
+        self._current_letter = ""
+        self._pixmap_source = None
 
     def _slm_log(self, msg: str) -> None:
         print(msg, flush=True)
@@ -350,6 +351,9 @@ class SLMWindow(QWidget):
             return False
         self._pixmap_source = pixmap
         self._current_letter = ""
+        self._last_png_path = os.path.abspath(path)
+        self._last_png_diagnostic = None
+        self._slm_log(f"[SLM] load_image: {self._last_png_path}")
         self.force_visual_refresh()
         return True
 
