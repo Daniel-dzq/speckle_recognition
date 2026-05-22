@@ -132,6 +132,7 @@ class MvCameraWorker(QThread):
         frame_count    = 0
         t_fps_start    = time.time()
         fps_report_sec = 2.0
+        timeout_streak = 0
 
         while self._running:
             t_start = time.time()
@@ -152,7 +153,15 @@ class MvCameraWorker(QThread):
             # ── grab frame ──
             head, raw_ptr = mvsdk.get_image_buffer(handle, timeout_ms=200)
             if raw_ptr is None:
-                continue   # timeout, keep looping
+                timeout_streak += 1
+                if timeout_streak == 50:
+                    self.error.emit(
+                        "MindVision: no frames received. Close vendor camera software "
+                        "and try again."
+                    )
+                    break
+                continue
+            timeout_streak = 0
 
             ok = mvsdk.image_process(handle, raw_ptr, frame_buf, head)
             mvsdk.release_image_buffer(handle, raw_ptr)
@@ -173,7 +182,7 @@ class MvCameraWorker(QThread):
             elif self._flip_v:
                 frame = cv2.flip(frame, 0)
 
-            self.frame_ready.emit(frame)
+            self.frame_ready.emit(frame.copy())
             frame_count += 1
 
             now = time.time()

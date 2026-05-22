@@ -143,7 +143,13 @@ class CameraWorker(QThread):
 
         if not cap.isOpened():
             kind = "video file" if self._is_file else "camera device"
-            self.error.emit(f"Cannot open {kind}: {self._source}")
+            msg = f"Cannot open {kind}: {self._source}"
+            if not self._is_file:
+                msg += (
+                    ". Close vendor camera software and try again, "
+                    "or select another camera index."
+                )
+            self.error.emit(msg)
             return
 
         # Apply initial resolution

@@ -367,14 +367,22 @@ class CameraLabel(QLabel):
         self.setText(self._IDLE_PLACEHOLDER)
 
     def set_frame(self, frame: np.ndarray):
-        h, w = frame.shape[:2]
-        if len(frame.shape) == 2:
-            gray = np.ascontiguousarray(frame)
-            img = QImage(gray.tobytes(), w, h, gray.strides[0], QImage.Format_Grayscale8)
+        if frame is None or frame.size == 0:
+            return
+        h, w = int(frame.shape[0]), int(frame.shape[1])
+        if frame.ndim == 2:
+            gray = np.ascontiguousarray(frame, dtype=np.uint8)
+            bpl = int(gray.strides[0])
+            img = QImage(gray.data, w, h, bpl, QImage.Format_Grayscale8).copy()
+        elif frame.ndim == 3 and frame.shape[2] >= 3:
+            bgr = np.ascontiguousarray(frame[:, :, :3], dtype=np.uint8)
+            rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+            rgb = np.ascontiguousarray(rgb)
+            img = QImage(rgb.data, w, h, rgb.strides[0], QImage.Format_RGB888).copy()
         else:
-            rgb = np.ascontiguousarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            img = QImage(rgb.tobytes(), w, h, rgb.strides[0], QImage.Format_RGB888)
+            return
         self._pixmap = QPixmap.fromImage(img)
+        self.setText("")
         self.setStyleSheet(self._frame_stylesheet())
         self._update_display()
 
@@ -422,6 +430,8 @@ class MainWindow(QMainWindow):
         self._manual_feed_timer: Optional[QTimer] = None
         self._manual_feed_active = False
         self._manual_feed_phase = 0
+        self._cam_open_logged = False
+        self._first_frame_logged = False
         self.current_challenge_label: Optional[str] = None
         self.last_sent_challenge_label: Optional[str] = None
         self._challenge_source = ""
@@ -475,7 +485,7 @@ class MainWindow(QMainWindow):
         self._left_scroll.setWidget(left_widget)
         self._left_scroll.setMinimumWidth(430)
         self._left_scroll.setMaximumWidth(480)
-        apply_premium_shadow(self._left_scroll)
+        self._left_scroll.setFrameShape(QFrame.NoFrame)
         self._top_splitter.addWidget(self._left_scroll)
 
         self._center_panel = self._build_center_panel()
@@ -628,14 +638,20 @@ class MainWindow(QMainWindow):
                 "Run: python scripts/export_ppt_challenges.py --input input.pptx",
             )
 
+    def _bind_collapsible(self, box: QGroupBox, body: QWidget) -> None:
+        """Hide advanced section content when collapsed so it cannot block clicks."""
+        body.setVisible(box.isChecked())
+        box.toggled.connect(body.setVisible)
+
     def _build_left_panel(self):
         container = QWidget()
+        container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         layout = QVBoxLayout(container)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
         layout.setContentsMargins(6, 6, 6, 6)
 
         self._challenge_preview = ChallengePreviewWidget()
-        apply_premium_shadow(self._challenge_preview)
+        self._challenge_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self._challenge_preview, stretch=0)
 
         ch_nav = QHBoxLayout()
@@ -729,6 +745,7 @@ class MainWindow(QMainWindow):
         add_card_title(cam_outer, "CCD acquisition")
         cl = QGridLayout()
         cl.setSpacing(8)
+        cl.setColumnStretch(1, 1)
 
         cl.addWidget(QLabel("Camera index:"), 0, 0)
         self._spin_cam_idx = QSpinBox()
@@ -800,6 +817,10 @@ class MainWindow(QMainWindow):
             "QGroupBox { font-weight: 600; color: #636366; }"
         )
         adv_outer = QVBoxLayout(self._advanced_slm_box)
+        adv_outer.setContentsMargins(8, 4, 8, 8)
+        slm_body = QWidget()
+        sl_body_layout = QVBoxLayout(slm_body)
+        sl_body_layout.setContentsMargins(0, 0, 0, 0)
         sl = QGridLayout()
         sl.setSpacing(6)
 
@@ -864,7 +885,9 @@ class MainWindow(QMainWindow):
         self._btn_load_img.clicked.connect(self._load_image_to_slm)
         sl.addWidget(self._btn_load_img, 7, 0, 1, 3)
 
-        adv_outer.addLayout(sl)
+        sl_body_layout.addLayout(sl)
+        adv_outer.addWidget(slm_body)
+        self._bind_collapsible(self._advanced_slm_box, slm_body)
         layout.addWidget(self._advanced_slm_box)
 
         self._advanced_cam_box = QGroupBox("Advanced camera / inference")
@@ -873,7 +896,11 @@ class MainWindow(QMainWindow):
         self._advanced_cam_box.setStyleSheet(
             "QGroupBox { font-weight: 600; color: #636366; }"
         )
-        adv_cam_layout = QVBoxLayout(self._advanced_cam_box)
+        adv_cam_outer = QVBoxLayout(self._advanced_cam_box)
+        adv_cam_outer.setContentsMargins(8, 4, 8, 8)
+        cam_adv_body = QWidget()
+        adv_cam_layout = QVBoxLayout(cam_adv_body)
+        adv_cam_layout.setContentsMargins(0, 0, 0, 0)
         adv_cam_layout.addWidget(self._build_cam_settings_box())
 
         inf_box = QGroupBox("Inference Settings")
@@ -899,9 +926,10 @@ class MainWindow(QMainWindow):
         self._chk_infer_active.setChecked(True)
         il.addWidget(self._chk_infer_active, 2, 0, 1, 2)
         adv_cam_layout.addWidget(inf_box)
+        adv_cam_outer.addWidget(cam_adv_body)
+        self._bind_collapsible(self._advanced_cam_box, cam_adv_body)
         layout.addWidget(self._advanced_cam_box)
 
-        layout.addStretch()
         return container
 
     def _build_center_panel(self) -> QFrame:
@@ -934,8 +962,14 @@ class MainWindow(QMainWindow):
         self._overlay_banner.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         self._overlay_banner.hide()
 
-        apply_premium_shadow(self._cam_card)
-        self._cam_glow = make_glow(self._cam_card, color="#3ddc84", radius=0)
+        self._cam_card.setStyleSheet(
+            "QFrame#camCard {"
+            "  background-color: #FFFFFF;"
+            "  border: 1px solid #D1D1D6;"
+            "  border-radius: 16px;"
+            "}"
+        )
+        self._cam_glow = make_glow(self._cam_label, color="#3ddc84", radius=0)
         return self._cam_card
 
     def _build_right_panel(self) -> QFrame:
@@ -1616,9 +1650,22 @@ class MainWindow(QMainWindow):
                 self._chk_flip_v.isChecked()
             )
 
+    def _reset_camera_session_logs(self) -> None:
+        self._cam_open_logged = False
+        self._first_frame_logged = False
+
     @Slot(dict)
     def _on_cam_props(self, props: dict):
         """Sync UI sliders/spinboxes with values reported by the camera."""
+        if not self._cam_open_logged:
+            backend = props.get("backend", "OpenCV")
+            w_px = int(props.get("width", 0) or 0)
+            h_px = int(props.get("height", 0) or 0)
+            self._log(
+                f"Camera open success ({backend})"
+                + (f" — reported {w_px}×{h_px}" if w_px and h_px else "")
+            )
+            self._cam_open_logged = True
 
         def _nan(v):
             return v is None or v != v  # None or NaN
@@ -1923,7 +1970,9 @@ class MainWindow(QMainWindow):
 
     def _start_camera(self):
         self._stop_camera()
+        self._reset_camera_session_logs()
         idx = self._spin_cam_idx.value()
+        self._log(f"Starting OpenCV CCD (camera index {idx}) …")
 
         # ── macOS camera-permission pre-check (main thread) ───────────────
         # AVFoundation's permission dialog must be triggered from the main
@@ -1955,8 +2004,11 @@ class MainWindow(QMainWindow):
                     "3. Click 'Scan Available Cameras' to find the correct index.\n"
                     "4. External industrial CCDs may need their vendor SDK installed."
                 )
-                self._log(f"[CAMERA ERROR] Cannot open device {idx}. "
-                          f"Check permissions and restart. Devices: {dev_names or 'unknown'}")
+                self._log(
+                    f"[CAMERA ERROR] Cannot open device {idx}. "
+                    f"Close vendor camera software and try again, or select another camera index. "
+                    f"Devices: {dev_names or 'unknown'}"
+                )
                 QMessageBox.critical(self, "Cannot Open Camera", msg)
                 return
             # Permission confirmed — suppress re-authorization in the worker thread.
@@ -1982,6 +2034,8 @@ class MainWindow(QMainWindow):
     def _start_mv_camera(self):
         """Start the HT-UBS300C via MindVision SDK (bypasses OpenCV entirely)."""
         self._stop_camera()
+        self._reset_camera_session_logs()
+        self._log("Starting MindVision CCD (HT-UBS300C) …")
 
         # Enumerate MindVision devices
         try:
@@ -2073,6 +2127,7 @@ class MainWindow(QMainWindow):
         _demo_trace_ui("Stop Camera")
         self._stop_manual_screenshot_feed()
         self._stop_camera_worker_if_any()
+        self._reset_camera_session_logs()
         self._capture_active = False
         self._btn_start_cam.setEnabled(True)
         self._btn_stop_cam.setEnabled(False)
@@ -2088,6 +2143,12 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_frame(self, frame: np.ndarray):
         _demo_trace_ui(f"_on_frame shape={frame.shape}")
+        if frame is not None and getattr(frame, "size", 0) > 0:
+            if not self._first_frame_logged:
+                self._log(
+                    f"First camera frame: shape={tuple(frame.shape)}, dtype={frame.dtype}"
+                )
+                self._first_frame_logged = True
         self._last_frame = frame
         self._cam_label.set_frame(frame)
         if self._chk_infer_active.isChecked() and self._infer_worker._model is not None:
@@ -2099,6 +2160,11 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_cam_error(self, msg: str):
         self._log(f"[CAMERA ERROR] {msg}")
+        if "cannot open" in msg.lower() or "open failed" in msg.lower():
+            self._log(
+                "Camera open failed. Close vendor camera software and try again, "
+                "or select another camera index."
+            )
         self._stop_camera()
 
     @Slot(float)
