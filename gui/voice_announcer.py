@@ -10,9 +10,49 @@ import re
 import shutil
 import subprocess
 import time
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 from PySide6.QtCore import QObject, QProcess, QTimer
+
+# Demo speech phrases (Unicode escapes; no literal CJK in source).
+PHRASE_ACCESS_GRANTED = "\u8ba4\u8bc1\u6210\u529f\uff0c\u53ef\u4ee5\u901a\u884c\u3002"
+PHRASE_ACCESS_DENIED = (
+    "\u8ba4\u8bc1\u5931\u8d25\uff0c\u8bf7\u66f4\u6362\u6388\u6743\u5149\u7ea4\u3002"
+)
+PHRASE_LOW_CONFIDENCE = (
+    "\u8bc6\u522b\u7f6e\u4fe1\u5ea6\u8f83\u4f4e\uff0c\u8bf7\u91cd\u65b0\u91c7\u96c6\u3002"
+)
+PHRASE_WAITING = "\u6b63\u5728\u7b49\u5f85\u7a33\u5b9a\u5149\u6591\u54cd\u5e94\u3002"
+PHRASE_TEST = "\u8bed\u97f3\u64ad\u62a5\u7cfb\u7edf\u5df2\u5c31\u7eea\u3002"
+
+PHRASE_BY_DECISION: Dict[str, str] = {
+    "ACCESS GRANTED": PHRASE_ACCESS_GRANTED,
+    "ACCESS DENIED": PHRASE_ACCESS_DENIED,
+    "LOW CONFIDENCE": PHRASE_LOW_CONFIDENCE,
+    "WAITING": PHRASE_WAITING,
+}
+
+_MAC_VOICE_PREFERENCES: Tuple[str, ...] = (
+    "Tingting",
+    "Sinji",
+    "Meijia",
+    "Mei-Jia",
+    "Flo (Chinese (China mainland))",
+    "Flo (Chinese (Taiwan))",
+    "Eddy (Chinese (China mainland))",
+    "Eddy (Chinese (Taiwan))",
+    "Grandma (Chinese (China mainland))",
+    "Grandpa (Chinese (China mainland))",
+    "Reed (Chinese (China mainland))",
+    "Rocko (Chinese (China mainland))",
+    "Sandy (Chinese (China mainland))",
+    "Shelley (Chinese (China mainland))",
+)
+
+
+def phrase_for_decision(decision: str) -> Optional[str]:
+    """Map stable GUI decision string to spoken phrase."""
+    return PHRASE_BY_DECISION.get((decision or "").strip().upper())
 
 
 class VoiceAnnouncer(QObject):
@@ -29,6 +69,7 @@ class VoiceAnnouncer(QObject):
         self._enabled = enabled
         self._log_fn = log_fn
         self._backend, self._program_path = self._detect_backend()
+        self._mac_voice: Optional[str] = None
         self._last_key_time: dict[str, float] = {}
         self._qprocesses: List[QProcess] = []
         self._popen_procs: List[subprocess.Popen] = []
@@ -42,10 +83,20 @@ class VoiceAnnouncer(QObject):
                 "If speech is expected, check system volume and output device in "
                 "System Settings."
             )
+        elif self._backend in ("say_popen", "say"):
+            self._mac_voice = self._detect_macos_chinese_voice(self._program_path)
+            if self._mac_voice:
+                self._log(f"Selected macOS voice: {self._mac_voice}")
+            else:
+                self._log("Chinese voice unavailable; using default voice.")
 
     @property
     def backend_name(self) -> str:
         return self._backend or "none"
+
+    @property
+    def selected_mac_voice(self) -> Optional[str]:
+        return self._mac_voice
 
     @property
     def available(self) -> bool:
@@ -89,13 +140,20 @@ class VoiceAnnouncer(QObject):
         self._stop_active()
         started = self._start_speech(phrase)
         if started:
-            self._log(f"Voice process started: {self._backend}")
+            self._log("Voice process started.")
         else:
             self._log("Voice speak failed: process did not start.")
         return started
 
     def stop(self) -> None:
         self._stop_active()
+
+    def _say_args(self, phrase: str) -> List[str]:
+        args: List[str] = []
+        if self._mac_voice and self._backend in ("say_popen", "say"):
+            args.extend(["-v", self._mac_voice])
+        args.append(phrase)
+        return args
 
     def _stop_active(self) -> None:
         for proc in list(self._qprocesses):
@@ -128,7 +186,7 @@ class VoiceAnnouncer(QObject):
             return False
         try:
             proc = subprocess.Popen(
-                [path, phrase],
+                [path, *self._say_args(phrase)],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
@@ -143,7 +201,7 @@ class VoiceAnnouncer(QObject):
         path = self._program_path or "say"
         proc = QProcess(self)
         proc.setProgram(path)
-        proc.setArguments([phrase])
+        proc.setArguments(self._say_args(phrase))
         proc.finished.connect(lambda *_a, p=proc: self._on_qprocess_finished(p))
         proc.errorOccurred.connect(
             lambda _err, p=proc: self._on_qprocess_error(p)
@@ -214,7 +272,9 @@ class VoiceAnnouncer(QObject):
 
     def _prune_finished(self) -> None:
         self._popen_procs = [p for p in self._popen_procs if p.poll() is None]
-        self._qprocesses = [p for p in self._qprocesses if p.state() != QProcess.NotRunning]
+        self._qprocesses = [
+            p for p in self._qprocesses if p.state() != QProcess.NotRunning
+        ]
 
     def _log(self, msg: str) -> None:
         if self._log_fn is not None:
@@ -237,3 +297,43 @@ class VoiceAnnouncer(QObject):
         if espeak:
             return "espeak", espeak
         return None, None
+
+    @staticmethod
+    def _parse_say_voice_listing(text: str) -> List[Tuple[str, str]]:
+        voices: List[Tuple[str, str]] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            match = re.match(r"^(.+?)\s{2,}(\S+)\s+#", line)
+            if match:
+                voices.append((match.group(1).strip(), match.group(2).strip()))
+        return voices
+
+    @classmethod
+    def _detect_macos_chinese_voice(cls, say_path: Optional[str]) -> Optional[str]:
+        path = say_path or shutil.which("say") or "/usr/bin/say"
+        if not path or not os.path.isfile(path):
+            return None
+        try:
+            result = subprocess.run(
+                [path, "-v", "?"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        listing = result.stdout or ""
+        voices = cls._parse_say_voice_listing(listing)
+        if not voices:
+            return None
+        by_name = {name: locale for name, locale in voices}
+        for pref in _MAC_VOICE_PREFERENCES:
+            if pref in by_name:
+                return pref
+        for name, locale in voices:
+            if locale.startswith("zh"):
+                return name
+        return None

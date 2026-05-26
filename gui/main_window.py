@@ -60,7 +60,12 @@ from gui.challenge_widgets  import (
     normalize_label,
 )
 from gui.prediction_display import PredictionDisplaySmoother
-from gui.voice_announcer import VoiceAnnouncer
+from gui.voice_announcer import (
+    PHRASE_TEST,
+    PHRASE_WAITING,
+    VoiceAnnouncer,
+    phrase_for_decision,
+)
 from gui.challenge_manifest import (
     challenge_inputs_dir,
     load_challenge_manifest,
@@ -2350,13 +2355,13 @@ class MainWindow(QMainWindow):
     def _test_voice(self) -> None:
         self._log("Test voice requested.")
         if self._voice_announcer.speak(
-            "Voice announcement ready.",
+            PHRASE_TEST,
             key="test_voice",
             cooldown_sec=0.0,
             force=True,
             ignore_enabled=True,
         ):
-            self._log("Voice announcement: Voice announcement ready.")
+            self._log("Voice announcement: test phrase (Chinese).")
         elif not self._voice_announcer.available:
             self._log("Voice test skipped: no speech backend available.")
         else:
@@ -2370,11 +2375,11 @@ class MainWindow(QMainWindow):
             if self._waiting_voice_spoken:
                 return
             if self._voice_announcer.speak(
-                "Waiting for stable response.",
+                PHRASE_WAITING,
                 key="waiting",
                 cooldown_sec=4.0,
             ):
-                self._log("Voice announcement: Waiting for stable response.")
+                self._log("Voice announcement: waiting (Chinese).")
             self._waiting_voice_spoken = True
             return
 
@@ -2382,17 +2387,17 @@ class MainWindow(QMainWindow):
         if decision == self._last_voice_decision:
             return
 
-        phrases = {
-            "ACCESS GRANTED": ("Access granted.", "granted"),
-            "ACCESS DENIED": ("Access denied.", "denied"),
-            "LOW CONFIDENCE": ("Low confidence. Please verify.", "low_confidence"),
-        }
-        entry = phrases.get(decision)
-        if entry is None:
+        text = phrase_for_decision(decision)
+        if text is None:
             return
-        text, key = entry
+        log_labels = {
+            "ACCESS GRANTED": "access granted (Chinese)",
+            "ACCESS DENIED": "access denied (Chinese)",
+            "LOW CONFIDENCE": "low confidence (Chinese)",
+        }
+        key = decision.lower().replace(" ", "_")
         if self._voice_announcer.speak(text, key=key, cooldown_sec=3.0):
-            self._log(f"Voice announcement: {text}")
+            self._log(f"Voice announcement: {log_labels.get(decision, decision)}")
         self._last_voice_decision = decision
 
     def _stop_camera(self):
