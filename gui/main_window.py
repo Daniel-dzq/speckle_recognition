@@ -466,6 +466,8 @@ class MainWindow(QMainWindow):
         self._refresh_screen_list()
         self._apply_responsive_metrics(force=True)
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
+        self._log("Homepage simplified for demo mode.")
         self._log(
             "Speckle-PUF demo ready: select a challenge, send it to the SLM, "
             "start CCD, then click Start Recognition."
@@ -652,71 +654,48 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         layout = QVBoxLayout(container)
-        layout.setSpacing(10)
+        layout.setSpacing(8)
         layout.setContentsMargins(6, 6, 6, 6)
 
-        self._challenge_preview = ChallengePreviewWidget()
-        self._challenge_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        layout.addWidget(self._challenge_preview, stretch=0)
+        # ── Demo status checklist ───────────────────────────────────────
+        status_box = QGroupBox("")
+        style_control_section(status_box)
+        status_outer = QVBoxLayout(status_box)
+        status_outer.setContentsMargins(4, 4, 4, 4)
+        add_card_title(status_outer, "Demo status")
+        self._lbl_step_fiber = QLabel("Fiber: checking…")
+        self._lbl_step_challenge = QLabel("Challenge: not sent")
+        self._lbl_step_ccd = QLabel("CCD: stopped")
+        self._lbl_step_recognition = QLabel("Recognition: stopped")
+        for lbl in (
+            self._lbl_step_fiber,
+            self._lbl_step_challenge,
+            self._lbl_step_ccd,
+            self._lbl_step_recognition,
+        ):
+            lbl.setObjectName("demoHintLabel")
+            lbl.setFont(demo_font(14))
+            status_outer.addWidget(lbl)
+        layout.addWidget(status_box)
 
-        ch_nav = QHBoxLayout()
-        ch_nav.setSpacing(8)
-        self._btn_prev = QPushButton("◀ Prev")
-        self._btn_next = QPushButton("Next ▶")
-        for btn in (self._btn_prev, self._btn_next):
-            btn.setMinimumHeight(44)
-            btn.setFont(demo_font(16, weight=QFont.DemiBold))
-        self._btn_prev.clicked.connect(self._prev_challenge)
-        self._btn_next.clicked.connect(self._next_challenge)
-        ch_nav.addWidget(self._btn_prev, 1)
-        ch_nav.addWidget(self._btn_next, 1)
-        layout.addLayout(ch_nav)
-
-        self._btn_send_slm = QPushButton("Send to SLM")
-        self._btn_send_slm.setObjectName("primary")
-        self._btn_send_slm.setMinimumHeight(46)
-        self._btn_send_slm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._btn_send_slm.setFont(demo_font(16, weight=QFont.Bold))
-        self._btn_send_slm.clicked.connect(self._send_to_slm)
-        layout.addWidget(self._btn_send_slm)
-
-        self._btn_show_slm = QPushButton("Open SLM Window")
-        self._btn_show_slm.setObjectName("openSlmPrimary")
-        self._btn_show_slm.setMinimumHeight(42)
-        self._btn_show_slm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self._btn_show_slm.setFont(demo_font(15, weight=QFont.DemiBold))
-        self._btn_show_slm.clicked.connect(self._toggle_slm_window)
-        layout.addWidget(self._btn_show_slm)
-
-        self._btn_load_challenge_set = QPushButton("Load Challenge Set")
-        self._btn_load_challenge_set.setMinimumHeight(42)
-        self._btn_load_challenge_set.setFont(demo_font(15))
-        self._btn_load_challenge_set.setToolTip(
-            "Reload challenge_inputs/manifest.json (exported from input.pptx)."
-        )
-        self._btn_load_challenge_set.clicked.connect(self._reload_challenge_manifest)
-        layout.addWidget(self._btn_load_challenge_set)
-
+        # ── Connected Fiber ───────────────────────────────────────────
         fiber_box = QGroupBox("")
         style_control_section(fiber_box)
         fiber_outer = QVBoxLayout(fiber_box)
         fiber_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(fiber_outer, "Connected fiber")
+        add_card_title(fiber_outer, "Connected Fiber")
         fl = QGridLayout()
         fl.setSpacing(8)
         fl.setContentsMargins(4, 0, 4, 4)
 
-        lbl_fiber = QLabel("Connected fiber:")
-        lbl_fiber.setFont(demo_font(15, weight=QFont.DemiBold))
-        fl.addWidget(lbl_fiber, 0, 0)
         self._combo_fiber = QComboBox()
         self._combo_fiber.setMinimumHeight(44)
         self._combo_fiber.setFont(demo_font(16))
         self._combo_fiber.setToolTip(
-            "Select the fiber connected to the setup; the matching FiberN.pth loads automatically."
+            "Select the fiber connected to the setup; FiberN.pth loads automatically."
         )
         self._combo_fiber.currentIndexChanged.connect(self._on_fiber_selected)
-        fl.addWidget(self._combo_fiber, 0, 1)
+        fl.addWidget(self._combo_fiber, 0, 0, 1, 2)
 
         self._btn_refresh_fiber = QPushButton("Refresh")
         self._btn_refresh_fiber.setFixedWidth(84)
@@ -743,89 +722,123 @@ class MainWindow(QMainWindow):
         fiber_outer.addLayout(fl)
         layout.addWidget(fiber_box)
 
+        # ── Challenge Input ───────────────────────────────────────────
+        self._challenge_preview = ChallengePreviewWidget()
+        self._challenge_preview.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        layout.addWidget(self._challenge_preview, stretch=0)
+
+        ch_nav = QHBoxLayout()
+        ch_nav.setSpacing(8)
+        self._btn_prev = QPushButton("Prev")
+        self._btn_next = QPushButton("Next")
+        for btn in (self._btn_prev, self._btn_next):
+            btn.setMinimumHeight(40)
+            btn.setFont(demo_font(15, weight=QFont.DemiBold))
+        self._btn_prev.clicked.connect(self._prev_challenge)
+        self._btn_next.clicked.connect(self._next_challenge)
+        ch_nav.addWidget(self._btn_prev, 1)
+        ch_nav.addWidget(self._btn_next, 1)
+        layout.addLayout(ch_nav)
+
+        self._btn_send_slm = QPushButton("Send to SLM")
+        self._btn_send_slm.setObjectName("primary")
+        self._btn_send_slm.setMinimumHeight(46)
+        self._btn_send_slm.setFont(demo_font(16, weight=QFont.Bold))
+        self._btn_send_slm.clicked.connect(self._send_to_slm)
+        layout.addWidget(self._btn_send_slm)
+
+        self._btn_show_slm = QPushButton("Open SLM Window")
+        self._btn_show_slm.setMinimumHeight(40)
+        self._btn_show_slm.setFont(demo_font(15, weight=QFont.DemiBold))
+        self._btn_show_slm.clicked.connect(self._toggle_slm_window)
+        layout.addWidget(self._btn_show_slm)
+
+        self._lbl_sent_challenge = QLabel("Sent to SLM: —")
+        self._lbl_sent_challenge.setObjectName("demoHintLabel")
+        self._lbl_sent_challenge.setFont(demo_font(14, weight=QFont.DemiBold))
+        self._lbl_sent_challenge.setWordWrap(True)
+        layout.addWidget(self._lbl_sent_challenge)
+
+        # ── CCD Acquisition (homepage minimal) ────────────────────────
         cam_box = QGroupBox("")
         style_control_section(cam_box)
         cam_outer = QVBoxLayout(cam_box)
         cam_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(cam_outer, "CCD acquisition")
+        add_card_title(cam_outer, "CCD Acquisition")
         cl = QGridLayout()
         cl.setSpacing(8)
-        cl.setColumnStretch(1, 1)
-
-        cl.addWidget(QLabel("Camera index:"), 0, 0)
-        self._spin_cam_idx = QSpinBox()
-        self._spin_cam_idx.setRange(0, 20)
-        self._spin_cam_idx.setMinimumHeight(40)
-        cl.addWidget(self._spin_cam_idx, 0, 1)
 
         self._btn_start_cam = QPushButton("Start CCD")
         self._btn_start_cam.setObjectName("primary")
-        self._btn_start_cam.setMinimumHeight(48)
+        self._btn_start_cam.setMinimumHeight(46)
         self._btn_start_cam.setFont(demo_font(16, weight=QFont.Bold))
         self._btn_start_cam.clicked.connect(self._start_camera)
-        cl.addWidget(self._btn_start_cam, 0, 2)
+        cl.addWidget(self._btn_start_cam, 0, 0)
 
-        self._btn_stop_cam = QPushButton("Stop")
+        self._btn_stop_cam = QPushButton("Stop CCD")
         self._btn_stop_cam.setObjectName("danger")
         self._btn_stop_cam.setMinimumHeight(44)
         self._btn_stop_cam.setEnabled(False)
         self._btn_stop_cam.clicked.connect(self._stop_camera)
-        cl.addWidget(self._btn_stop_cam, 1, 2)
+        cl.addWidget(self._btn_stop_cam, 0, 1)
 
-        self._btn_load_video = QPushButton("Load Video File")
-        self._btn_load_video.setMinimumHeight(42)
-        self._btn_load_video.clicked.connect(self._load_video_file)
-        cl.addWidget(self._btn_load_video, 1, 0, 1, 2)
-
-        self._btn_start_mv = QPushButton("MindVision CCD (HT-UBS300C)")
-        self._btn_start_mv.setMinimumHeight(42)
+        self._btn_start_mv = QPushButton("MindVision CCD")
+        self._btn_start_mv.setMinimumHeight(40)
         self._btn_start_mv.setToolTip(
-            "Connect via MindVision SDK (libmvsdk.dylib).\n"
-            "Use this instead of Start CCD for the HT-UBS300C."
+            "HT-UBS300C via MindVision SDK (use instead of Start CCD when applicable)."
         )
         self._btn_start_mv.clicked.connect(self._start_mv_camera)
-        cl.addWidget(self._btn_start_mv, 2, 0, 1, 3)
+        cl.addWidget(self._btn_start_mv, 1, 0, 1, 2)
 
-        self._btn_scan_cam = QPushButton("Scan Available Cameras")
-        self._btn_scan_cam.setMinimumHeight(38)
-        self._btn_scan_cam.setToolTip(
-            "Probe indices 0-9 on the main thread.\n"
-            "On macOS this also triggers the camera permission dialog."
-        )
-        self._btn_scan_cam.clicked.connect(self._scan_cameras)
-        cl.addWidget(self._btn_scan_cam, 3, 0, 1, 3)
-
-        cl.addWidget(QLabel("Resolution:"), 4, 0)
-        self._combo_cam_res = QComboBox()
-        self._combo_cam_res.setMinimumHeight(40)
-        self._combo_cam_res.addItem("Auto (default)", (None, None))
-        self._combo_cam_res.addItem("2048×1536", (2048, 1536))
-        self._combo_cam_res.addItem("1920×1440", (1920, 1440))
-        self._combo_cam_res.addItem("1280×960",  (1280, 960))
-        self._combo_cam_res.addItem("1024×768",  (1024, 768))
-        self._combo_cam_res.addItem("640×480",   (640, 480))
-        self._combo_cam_res.setCurrentIndex(1)
-        cl.addWidget(self._combo_cam_res, 4, 1, 1, 2)
-
-        self._lbl_source = QLabel("No source")
+        self._lbl_source = QLabel("Camera: not started")
         self._lbl_source.setObjectName("demoHintLabel")
         self._lbl_source.setWordWrap(True)
-        cl.addWidget(self._lbl_source, 5, 0, 1, 3)
+        cl.addWidget(self._lbl_source, 2, 0, 1, 2)
         cam_outer.addLayout(cl)
         layout.addWidget(cam_box)
         self._group_camera_video = cam_box
 
+        # ── Offline video input (collapsed, below CCD) ──────────────────
+        self._offline_input_box = QGroupBox("Offline Demo / Video Input")
+        self._offline_input_box.setCheckable(True)
+        self._offline_input_box.setChecked(False)
+        self._offline_input_box.setStyleSheet(
+            "QGroupBox { font-weight: 600; color: #636366; }"
+        )
+        offline_outer = QVBoxLayout(self._offline_input_box)
+        offline_outer.setContentsMargins(8, 4, 8, 8)
+        offline_body = QWidget()
+        offline_layout = QVBoxLayout(offline_body)
+        offline_layout.setContentsMargins(0, 0, 0, 0)
+        offline_hint = QLabel(
+            "Load a recorded video when the CCD is unavailable or for offline demo."
+        )
+        offline_hint.setObjectName("demoHintLabel")
+        offline_hint.setWordWrap(True)
+        offline_layout.addWidget(offline_hint)
+        self._btn_load_video = QPushButton("Load Video File")
+        self._btn_load_video.setMinimumHeight(40)
+        self._btn_load_video.setToolTip(
+            "Play an AVI/MP4 file into the live preview and recognition pipeline."
+        )
+        self._btn_load_video.clicked.connect(self._load_video_file)
+        offline_layout.addWidget(self._btn_load_video)
+        offline_outer.addWidget(offline_body)
+        self._bind_collapsible(self._offline_input_box, offline_body)
+        layout.addWidget(self._offline_input_box)
+
+        # ── Recognition ─────────────────────────────────────────────────
         recog_box = QGroupBox("")
         style_control_section(recog_box)
         recog_outer = QVBoxLayout(recog_box)
         recog_outer.setContentsMargins(4, 4, 4, 4)
-        add_card_title(recog_outer, "Recognition control")
+        add_card_title(recog_outer, "Recognition")
         rl = QGridLayout()
         rl.setSpacing(8)
 
         self._btn_start_recognition = QPushButton("Start Recognition")
         self._btn_start_recognition.setObjectName("primary")
-        self._btn_start_recognition.setMinimumHeight(48)
+        self._btn_start_recognition.setMinimumHeight(46)
         self._btn_start_recognition.setFont(demo_font(16, weight=QFont.Bold))
         self._btn_start_recognition.clicked.connect(self._start_recognition)
         rl.addWidget(self._btn_start_recognition, 0, 0, 1, 2)
@@ -854,23 +867,62 @@ class MainWindow(QMainWindow):
         recog_outer.addLayout(rl)
         layout.addWidget(recog_box)
 
-        self._advanced_slm_box = QGroupBox("Advanced SLM settings")
-        self._advanced_slm_box.setCheckable(True)
-        self._advanced_slm_box.setChecked(False)
-        self._advanced_slm_box.setStyleSheet(
+        # ── Advanced Settings (collapsed) ─────────────────────────────
+        self._advanced_box = QGroupBox("Advanced Settings")
+        self._advanced_box.setCheckable(True)
+        self._advanced_box.setChecked(False)
+        self._advanced_box.setStyleSheet(
             "QGroupBox { font-weight: 600; color: #636366; }"
         )
-        adv_outer = QVBoxLayout(self._advanced_slm_box)
+        adv_outer = QVBoxLayout(self._advanced_box)
         adv_outer.setContentsMargins(8, 4, 8, 8)
-        slm_body = QWidget()
-        sl_body_layout = QVBoxLayout(slm_body)
-        sl_body_layout.setContentsMargins(0, 0, 0, 0)
+        adv_body = QWidget()
+        adv_layout = QVBoxLayout(adv_body)
+        adv_layout.setContentsMargins(0, 0, 0, 0)
+        adv_layout.setSpacing(8)
+
+        self._btn_load_challenge_set = QPushButton("Load Challenge Set")
+        self._btn_load_challenge_set.setMinimumHeight(36)
+        self._btn_load_challenge_set.setToolTip(
+            "Reload challenge_inputs/manifest.json (exported from input.pptx)."
+        )
+        self._btn_load_challenge_set.clicked.connect(self._reload_challenge_manifest)
+        adv_layout.addWidget(self._btn_load_challenge_set)
+
+        cam_adv = QGridLayout()
+        cam_adv.setSpacing(6)
+        cam_adv.addWidget(QLabel("Camera index:"), 0, 0)
+        self._spin_cam_idx = QSpinBox()
+        self._spin_cam_idx.setRange(0, 20)
+        self._spin_cam_idx.setMinimumHeight(36)
+        cam_adv.addWidget(self._spin_cam_idx, 0, 1)
+
+        self._btn_scan_cam = QPushButton("Scan Cameras")
+        self._btn_scan_cam.setMinimumHeight(36)
+        self._btn_scan_cam.setToolTip(
+            "Probe indices 0-9; on macOS triggers camera permission dialog."
+        )
+        self._btn_scan_cam.clicked.connect(self._scan_cameras)
+        cam_adv.addWidget(self._btn_scan_cam, 0, 2)
+
+        cam_adv.addWidget(QLabel("Resolution:"), 1, 0)
+        self._combo_cam_res = QComboBox()
+        self._combo_cam_res.setMinimumHeight(36)
+        self._combo_cam_res.addItem("Auto (default)", (None, None))
+        self._combo_cam_res.addItem("2048×1536", (2048, 1536))
+        self._combo_cam_res.addItem("1920×1440", (1920, 1440))
+        self._combo_cam_res.addItem("1280×960", (1280, 960))
+        self._combo_cam_res.addItem("1024×768", (1024, 768))
+        self._combo_cam_res.addItem("640×480", (640, 480))
+        self._combo_cam_res.setCurrentIndex(1)
+        cam_adv.addWidget(self._combo_cam_res, 1, 1, 1, 2)
+        adv_layout.addLayout(cam_adv)
+
         sl = QGridLayout()
         sl.setSpacing(6)
-
         sl.addWidget(QLabel("SLM screen:"), 0, 0)
         self._combo_slm_screen = QComboBox()
-        self._combo_slm_screen.setMinimumHeight(36)
+        self._combo_slm_screen.setMinimumHeight(34)
         sl.addWidget(self._combo_slm_screen, 0, 1)
         self._btn_refresh_screens = QPushButton("Refresh")
         self._btn_refresh_screens.clicked.connect(self._refresh_screen_list)
@@ -885,10 +937,6 @@ class MainWindow(QMainWindow):
         sl.addWidget(self._btn_move_slm, 2, 0, 1, 3)
 
         self._btn_test_slm = QPushButton("Test SLM Output")
-        self._btn_test_slm.setToolTip(
-            "Draw a built-in SLM TEST pattern with Qt. "
-            "Use to verify the external display path on macOS."
-        )
         self._btn_test_slm.clicked.connect(self._test_slm_output)
         sl.addWidget(self._btn_test_slm, 3, 0, 1, 3)
 
@@ -913,7 +961,9 @@ class MainWindow(QMainWindow):
         sl.addWidget(QLabel("Challenge type:"), 6, 0)
         self._combo_challenge_type = QComboBox()
         self._combo_challenge_type.addItems(["Text", "Image"])
-        self._combo_challenge_type.currentTextChanged.connect(self._on_challenge_type_changed)
+        self._combo_challenge_type.currentTextChanged.connect(
+            self._on_challenge_type_changed
+        )
         sl.addWidget(self._combo_challenge_type, 6, 1)
 
         self._input_letter = QLineEdit("")
@@ -923,33 +973,15 @@ class MainWindow(QMainWindow):
         sl.addWidget(self._input_letter, 6, 2)
 
         self._btn_load_img = QPushButton("Load Image to SLM")
-        self._btn_load_img.setToolTip(
-            "Load a PNG/JPG/BMP for PPT exports, avatars, or custom patterns."
-        )
         self._btn_load_img.clicked.connect(self._load_image_to_slm)
         sl.addWidget(self._btn_load_img, 7, 0, 1, 3)
+        adv_layout.addLayout(sl)
 
-        sl_body_layout.addLayout(sl)
-        adv_outer.addWidget(slm_body)
-        self._bind_collapsible(self._advanced_slm_box, slm_body)
-        layout.addWidget(self._advanced_slm_box)
-
-        self._advanced_cam_box = QGroupBox("Advanced camera / inference")
-        self._advanced_cam_box.setCheckable(True)
-        self._advanced_cam_box.setChecked(False)
-        self._advanced_cam_box.setStyleSheet(
-            "QGroupBox { font-weight: 600; color: #636366; }"
-        )
-        adv_cam_outer = QVBoxLayout(self._advanced_cam_box)
-        adv_cam_outer.setContentsMargins(8, 4, 8, 8)
-        cam_adv_body = QWidget()
-        adv_cam_layout = QVBoxLayout(cam_adv_body)
-        adv_cam_layout.setContentsMargins(0, 0, 0, 0)
-        adv_cam_layout.addWidget(self._build_cam_settings_box())
+        adv_layout.addWidget(self._build_cam_settings_box())
 
         inf_box = QGroupBox("Inference Settings")
         il = QGridLayout(inf_box)
-        il.setSpacing(8)
+        il.setSpacing(6)
         il.addWidget(QLabel("Infer every N frames:"), 0, 0)
         self._spin_infer_every = QSpinBox()
         self._spin_infer_every.setRange(1, 30)
@@ -969,16 +1001,50 @@ class MainWindow(QMainWindow):
         self._chk_infer_active = QCheckBox("Recognition active (sync)")
         self._chk_infer_active.setChecked(False)
         self._chk_infer_active.setToolTip(
-            "Mirrors Start/Stop Recognition. Use the Recognition control card for the demo."
+            "Mirrors Start/Stop Recognition on the homepage."
         )
         self._chk_infer_active.toggled.connect(self._on_infer_active_toggled)
         il.addWidget(self._chk_infer_active, 2, 0, 1, 2)
-        adv_cam_layout.addWidget(inf_box)
-        adv_cam_outer.addWidget(cam_adv_body)
-        self._bind_collapsible(self._advanced_cam_box, cam_adv_body)
-        layout.addWidget(self._advanced_cam_box)
+        adv_layout.addWidget(inf_box)
+
+        adv_outer.addWidget(adv_body)
+        self._bind_collapsible(self._advanced_box, adv_body)
+        layout.addWidget(self._advanced_box)
+        layout.addStretch(1)
 
         return container
+
+    def _refresh_demo_step_status(self) -> None:
+        if not hasattr(self, "_lbl_step_fiber"):
+            return
+        if self._infer_worker._model is not None and self._active_fiber:
+            self._lbl_step_fiber.setText(f"Fiber: loaded ({self._active_fiber})")
+        elif self._active_fiber:
+            self._lbl_step_fiber.setText(f"Fiber: missing model ({self._active_fiber})")
+        else:
+            self._lbl_step_fiber.setText("Fiber: not loaded")
+
+        sent = (self.last_sent_challenge_label or "").strip()
+        if sent:
+            self._lbl_step_challenge.setText(f"Challenge: sent ({sent})")
+            self._lbl_sent_challenge.setText(f"Sent to SLM: {sent}")
+        else:
+            self._lbl_step_challenge.setText("Challenge: not sent")
+            self._lbl_sent_challenge.setText("Sent to SLM: —")
+
+        if self._capture_active:
+            src = self._lbl_source.text() if hasattr(self, "_lbl_source") else ""
+            if src.startswith("File:"):
+                self._lbl_step_ccd.setText("CCD: video file active")
+            else:
+                self._lbl_step_ccd.setText("CCD: running")
+        else:
+            self._lbl_step_ccd.setText("CCD: stopped")
+
+        if self._recognition_active:
+            self._lbl_step_recognition.setText("Recognition: running")
+        else:
+            self._lbl_step_recognition.setText("Recognition: stopped")
 
     def _build_center_panel(self) -> QFrame:
         self._cam_card = QFrame()
@@ -1152,6 +1218,7 @@ class MainWindow(QMainWindow):
             self._lbl_model.setText("Model: missing")
             self._active_fiber = ""
             self._log(f"[WARNING] Model file missing: {path}")
+            self._refresh_demo_step_status()
             return
 
         self._active_fiber = fiber
@@ -1274,6 +1341,7 @@ class MainWindow(QMainWindow):
             self._combo_fiber.blockSignals(False)
         self._log(f"[MODEL] {msg}")
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
 
     def _toggle_slm_window(self):
         if self._slm_window is not None and self._slm_window.isVisible():
@@ -1391,6 +1459,7 @@ class MainWindow(QMainWindow):
         self._robot_panel.set_challenge_label(self.last_sent_challenge_label)
         self._robot_panel.on_idle()
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
 
     def _push_challenge_to_slm(self) -> bool:
         label = (self.current_challenge_label or "").strip()
@@ -2088,6 +2157,7 @@ class MainWindow(QMainWindow):
         self._set_cam_controls_enabled(True)
         self._log(f"Camera started (device {idx})")
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
         _demo_trace_ui(f"Start Camera OpenCV worker started idx={idx}")
 
     def _start_mv_camera(self):
@@ -2156,6 +2226,7 @@ class MainWindow(QMainWindow):
         self._set_cam_controls_enabled(True)
         self._log(f"MindVision camera started: {name}")
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
         _demo_trace_ui(f"MindVision worker started name={name!r}")
 
     def _load_video_file(self):
@@ -2182,6 +2253,7 @@ class MainWindow(QMainWindow):
         self._set_cam_controls_enabled(True)
         self._log(f"Video file loaded: {path}")
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
         _demo_trace_ui(f"Video file worker started path={path!r}")
 
     def _recognition_block_reason(self) -> Optional[str]:
@@ -2238,6 +2310,7 @@ class MainWindow(QMainWindow):
         self._cam_glow.setBlurRadius(0)
         self._hide_overlay_banner()
         self._log("Recognition started.")
+        self._refresh_demo_step_status()
 
     def _stop_recognition(self) -> None:
         if not self._recognition_active:
@@ -2257,6 +2330,7 @@ class MainWindow(QMainWindow):
         self._recognition_result.set_waiting(self._auth_challenge_label())
         self._update_recognition_status_label()
         self._log("Recognition stopped.")
+        self._refresh_demo_step_status()
 
     def _on_infer_active_toggled(self, checked: bool) -> None:
         if checked == self._recognition_active:
@@ -2274,15 +2348,19 @@ class MainWindow(QMainWindow):
         self._log(f"Voice announcement {state}.")
 
     def _test_voice(self) -> None:
+        self._log("Test voice requested.")
         if self._voice_announcer.speak(
             "Voice announcement ready.",
             key="test_voice",
             cooldown_sec=0.0,
             force=True,
+            ignore_enabled=True,
         ):
             self._log("Voice announcement: Voice announcement ready.")
         elif not self._voice_announcer.available:
             self._log("Voice test skipped: no speech backend available.")
+        else:
+            self._log("Voice test failed to start speech process.")
 
     def _announce_stable_decision(self, snap) -> None:
         if not self._recognition_active or not self._chk_voice.isChecked():
@@ -2334,6 +2412,7 @@ class MainWindow(QMainWindow):
         self._cam_glow.setBlurRadius(0)
         self._overlay_banner.hide()
         self._update_recognition_status_label()
+        self._refresh_demo_step_status()
         self._log("Camera stopped.")
 
     @Slot(object)
