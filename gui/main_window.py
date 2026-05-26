@@ -60,6 +60,7 @@ from gui.challenge_widgets  import (
     normalize_label,
 )
 from gui.prediction_display import PredictionDisplaySmoother
+from gui.voice_announcer import VoiceAnnouncer
 from gui.challenge_manifest import (
     challenge_inputs_dir,
     load_challenge_manifest,
@@ -420,6 +421,10 @@ class MainWindow(QMainWindow):
             banner_hold_sec=2.0,
             granted_release_hold_sec=2.0,
         )
+        self._recognition_active = False
+        self._last_voice_decision = ""
+        self._waiting_voice_spoken = False
+        self._voice_announcer = VoiceAnnouncer(enabled=True, log_fn=self._log, parent=self)
         self._banner_hide_timer = QTimer(self)
         self._banner_hide_timer.setSingleShot(True)
         self._banner_hide_timer.timeout.connect(self._hide_overlay_banner)
@@ -460,10 +465,10 @@ class MainWindow(QMainWindow):
         self._refresh_fiber_list()
         self._refresh_screen_list()
         self._apply_responsive_metrics(force=True)
+        self._update_recognition_status_label()
         self._log(
-            "Speckle-PUF demo ready: select a challenge pattern, send it to the SLM, "
-            "then start the camera — speckle response appears in the center panel and "
-            "recognition uses the loaded authorized fiber model."
+            "Speckle-PUF demo ready: select a challenge, send it to the SLM, "
+            "start CCD, then click Start Recognition."
         )
 
     def _setup_ui(self):
@@ -810,6 +815,45 @@ class MainWindow(QMainWindow):
         layout.addWidget(cam_box)
         self._group_camera_video = cam_box
 
+        recog_box = QGroupBox("")
+        style_control_section(recog_box)
+        recog_outer = QVBoxLayout(recog_box)
+        recog_outer.setContentsMargins(4, 4, 4, 4)
+        add_card_title(recog_outer, "Recognition control")
+        rl = QGridLayout()
+        rl.setSpacing(8)
+
+        self._btn_start_recognition = QPushButton("Start Recognition")
+        self._btn_start_recognition.setObjectName("primary")
+        self._btn_start_recognition.setMinimumHeight(48)
+        self._btn_start_recognition.setFont(demo_font(16, weight=QFont.Bold))
+        self._btn_start_recognition.clicked.connect(self._start_recognition)
+        rl.addWidget(self._btn_start_recognition, 0, 0, 1, 2)
+
+        self._btn_stop_recognition = QPushButton("Stop Recognition")
+        self._btn_stop_recognition.setObjectName("danger")
+        self._btn_stop_recognition.setMinimumHeight(44)
+        self._btn_stop_recognition.setEnabled(False)
+        self._btn_stop_recognition.clicked.connect(self._stop_recognition)
+        rl.addWidget(self._btn_stop_recognition, 1, 0, 1, 2)
+
+        self._chk_voice = QCheckBox("Voice announcement")
+        self._chk_voice.setChecked(True)
+        self._chk_voice.toggled.connect(self._on_voice_toggled)
+        rl.addWidget(self._chk_voice, 2, 0)
+
+        self._btn_test_voice = QPushButton("Test Voice")
+        self._btn_test_voice.setMinimumHeight(38)
+        self._btn_test_voice.clicked.connect(self._test_voice)
+        rl.addWidget(self._btn_test_voice, 2, 1)
+
+        self._lbl_recognition_status = QLabel("Recognition: stopped")
+        self._lbl_recognition_status.setObjectName("demoHintLabel")
+        self._lbl_recognition_status.setWordWrap(True)
+        rl.addWidget(self._lbl_recognition_status, 3, 0, 1, 2)
+        recog_outer.addLayout(rl)
+        layout.addWidget(recog_box)
+
         self._advanced_slm_box = QGroupBox("Advanced SLM settings")
         self._advanced_slm_box.setCheckable(True)
         self._advanced_slm_box.setChecked(False)
@@ -922,8 +966,12 @@ class MainWindow(QMainWindow):
             lambda v: self._infer_worker.set_vote_window(v)
         )
         il.addWidget(self._spin_vote, 1, 1)
-        self._chk_infer_active = QCheckBox("Recognition active")
-        self._chk_infer_active.setChecked(True)
+        self._chk_infer_active = QCheckBox("Recognition active (sync)")
+        self._chk_infer_active.setChecked(False)
+        self._chk_infer_active.setToolTip(
+            "Mirrors Start/Stop Recognition. Use the Recognition control card for the demo."
+        )
+        self._chk_infer_active.toggled.connect(self._on_infer_active_toggled)
         il.addWidget(self._chk_infer_active, 2, 0, 1, 2)
         adv_cam_layout.addWidget(inf_box)
         adv_cam_outer.addWidget(cam_adv_body)
@@ -1225,6 +1273,7 @@ class MainWindow(QMainWindow):
                 self._combo_fiber.setCurrentIndex(idx)
             self._combo_fiber.blockSignals(False)
         self._log(f"[MODEL] {msg}")
+        self._update_recognition_status_label()
 
     def _toggle_slm_window(self):
         if self._slm_window is not None and self._slm_window.isVisible():
@@ -1328,11 +1377,20 @@ class MainWindow(QMainWindow):
     def _activate_auth_challenge(self, label: str) -> None:
         """Recognition compares against the challenge successfully sent to the SLM."""
         self.last_sent_challenge_label = label.strip()
+        try:
+            from gui.gui_diagnostics import GuiDiagnosticsSession
+
+            sess = GuiDiagnosticsSession.get()
+            if sess is not None:
+                sess.set_auth_challenge(self.last_sent_challenge_label)
+        except ImportError:
+            pass
         self._display_smoother.reset()
         self._hide_overlay_banner()
         self._recognition_result.set_waiting(self.last_sent_challenge_label)
         self._robot_panel.set_challenge_label(self.last_sent_challenge_label)
         self._robot_panel.on_idle()
+        self._update_recognition_status_label()
 
     def _push_challenge_to_slm(self) -> bool:
         label = (self.current_challenge_label or "").strip()
@@ -2029,6 +2087,7 @@ class MainWindow(QMainWindow):
         self._lbl_source.setText(f"Camera device: {idx}")
         self._set_cam_controls_enabled(True)
         self._log(f"Camera started (device {idx})")
+        self._update_recognition_status_label()
         _demo_trace_ui(f"Start Camera OpenCV worker started idx={idx}")
 
     def _start_mv_camera(self):
@@ -2096,6 +2155,7 @@ class MainWindow(QMainWindow):
         self._lbl_source.setText(f"MindVision CCD: {name}")
         self._set_cam_controls_enabled(True)
         self._log(f"MindVision camera started: {name}")
+        self._update_recognition_status_label()
         _demo_trace_ui(f"MindVision worker started name={name!r}")
 
     def _load_video_file(self):
@@ -2121,10 +2181,145 @@ class MainWindow(QMainWindow):
         self._lbl_source.setText(f"File: {name}")
         self._set_cam_controls_enabled(True)
         self._log(f"Video file loaded: {path}")
+        self._update_recognition_status_label()
         _demo_trace_ui(f"Video file worker started path={path!r}")
+
+    def _recognition_block_reason(self) -> Optional[str]:
+        if not self._capture_active:
+            return "CCD is not running. Start CCD first."
+        if self._infer_worker._model is None:
+            return "No model loaded. Select a connected fiber first."
+        if not (self.last_sent_challenge_label or "").strip():
+            return "No challenge sent. Select a challenge and send it to SLM first."
+        return None
+
+    def _sync_infer_checkbox(self, active: bool) -> None:
+        self._chk_infer_active.blockSignals(True)
+        self._chk_infer_active.setChecked(active)
+        self._chk_infer_active.blockSignals(False)
+
+    def _update_recognition_status_label(self, message: str = "") -> None:
+        if message:
+            self._lbl_recognition_status.setText(message)
+            return
+        if self._recognition_active:
+            self._lbl_recognition_status.setText("Recognition: running")
+            return
+        blocked = self._recognition_block_reason()
+        if blocked:
+            self._lbl_recognition_status.setText(
+                f"Recognition: waiting — {blocked}"
+            )
+        else:
+            self._lbl_recognition_status.setText("Recognition: stopped")
+
+    def _start_recognition(self) -> None:
+        reason = self._recognition_block_reason()
+        if reason:
+            self._log(f"Start recognition blocked: {reason}")
+            self._update_recognition_status_label(
+                f"Recognition: blocked — {reason}"
+            )
+            return
+        if self._recognition_active:
+            return
+        self._recognition_active = True
+        self._sync_infer_checkbox(True)
+        self._display_smoother.reset()
+        self._last_voice_decision = ""
+        self._waiting_voice_spoken = False
+        self._infer_worker.reset_inference_state()
+        self._btn_start_recognition.setEnabled(False)
+        self._btn_stop_recognition.setEnabled(True)
+        self._update_recognition_status_label()
+        self._recognition_result.set_waiting(self._auth_challenge_label())
+        self._robot_panel.set_challenge_label(self._auth_challenge_label())
+        self._robot_panel.on_idle()
+        self._cam_glow.setBlurRadius(0)
+        self._hide_overlay_banner()
+        self._log("Recognition started.")
+
+    def _stop_recognition(self) -> None:
+        if not self._recognition_active:
+            return
+        self._recognition_active = False
+        self._sync_infer_checkbox(False)
+        self._infer_worker.reset_inference_state()
+        self._display_smoother.reset()
+        self._voice_announcer.stop()
+        self._last_voice_decision = ""
+        self._waiting_voice_spoken = False
+        self._btn_start_recognition.setEnabled(True)
+        self._btn_stop_recognition.setEnabled(False)
+        self._cam_glow.setBlurRadius(0)
+        self._robot_panel.on_idle()
+        self._hide_overlay_banner()
+        self._recognition_result.set_waiting(self._auth_challenge_label())
+        self._update_recognition_status_label()
+        self._log("Recognition stopped.")
+
+    def _on_infer_active_toggled(self, checked: bool) -> None:
+        if checked == self._recognition_active:
+            return
+        if checked:
+            self._start_recognition()
+            if not self._recognition_active:
+                self._sync_infer_checkbox(False)
+        else:
+            self._stop_recognition()
+
+    def _on_voice_toggled(self, checked: bool) -> None:
+        self._voice_announcer.set_enabled(checked)
+        state = "enabled" if checked else "disabled"
+        self._log(f"Voice announcement {state}.")
+
+    def _test_voice(self) -> None:
+        if self._voice_announcer.speak(
+            "Voice announcement ready.",
+            key="test_voice",
+            cooldown_sec=0.0,
+            force=True,
+        ):
+            self._log("Voice announcement: Voice announcement ready.")
+        elif not self._voice_announcer.available:
+            self._log("Voice test skipped: no speech backend available.")
+
+    def _announce_stable_decision(self, snap) -> None:
+        if not self._recognition_active or not self._chk_voice.isChecked():
+            return
+        decision = (snap.decision or "WAITING").strip().upper()
+        if decision == "WAITING":
+            if self._waiting_voice_spoken:
+                return
+            if self._voice_announcer.speak(
+                "Waiting for stable response.",
+                key="waiting",
+                cooldown_sec=4.0,
+            ):
+                self._log("Voice announcement: Waiting for stable response.")
+            self._waiting_voice_spoken = True
+            return
+
+        self._waiting_voice_spoken = False
+        if decision == self._last_voice_decision:
+            return
+
+        phrases = {
+            "ACCESS GRANTED": ("Access granted.", "granted"),
+            "ACCESS DENIED": ("Access denied.", "denied"),
+            "LOW CONFIDENCE": ("Low confidence. Please verify.", "low_confidence"),
+        }
+        entry = phrases.get(decision)
+        if entry is None:
+            return
+        text, key = entry
+        if self._voice_announcer.speak(text, key=key, cooldown_sec=3.0):
+            self._log(f"Voice announcement: {text}")
+        self._last_voice_decision = decision
 
     def _stop_camera(self):
         _demo_trace_ui("Stop Camera")
+        self._stop_recognition()
         self._stop_manual_screenshot_feed()
         self._stop_camera_worker_if_any()
         self._reset_camera_session_logs()
@@ -2138,6 +2333,7 @@ class MainWindow(QMainWindow):
         self._recognition_result.set_waiting(self._auth_challenge_label())
         self._cam_glow.setBlurRadius(0)
         self._overlay_banner.hide()
+        self._update_recognition_status_label()
         self._log("Camera stopped.")
 
     @Slot(object)
@@ -2149,9 +2345,17 @@ class MainWindow(QMainWindow):
                     f"First camera frame: shape={tuple(frame.shape)}, dtype={frame.dtype}"
                 )
                 self._first_frame_logged = True
+            try:
+                from gui.gui_diagnostics import GuiDiagnosticsSession
+
+                sess = GuiDiagnosticsSession.get()
+                if sess is not None:
+                    sess.log_raw_frame(frame, tag="live")
+            except ImportError:
+                pass
         self._last_frame = frame
         self._cam_label.set_frame(frame)
-        if self._chk_infer_active.isChecked() and self._infer_worker._model is not None:
+        if self._recognition_active and self._infer_worker._model is not None:
             self._infer_worker.push_frame(frame)
             if self._cam_glow.blurRadius() == 0:
                 self._cam_glow.setBlurRadius(28)
@@ -2174,6 +2378,8 @@ class MainWindow(QMainWindow):
 
     @Slot(dict)
     def _on_prediction(self, result: dict):
+        if not self._recognition_active:
+            return
         _demo_trace_ui(
             f"_on_prediction top1={result.get('top1')!r} conf={result.get('confidence')}"
         )
@@ -2201,6 +2407,7 @@ class MainWindow(QMainWindow):
 
         snap = feed.snapshot
         self._recognition_result.apply_snapshot(snap)
+        self._announce_stable_decision(snap)
 
         show_warn = snap.decision == "LOW CONFIDENCE" or (
             snap.match is True
@@ -2332,6 +2539,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         _demo_trace_ui("closeEvent: stopping camera and inference thread")
+        self._stop_recognition()
+        self._voice_announcer.stop()
         self._stop_camera()
         if self._infer_worker.isRunning():
             self._infer_worker.stop()

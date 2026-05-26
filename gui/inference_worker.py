@@ -32,6 +32,14 @@ sys.path.insert(0, ROOT)
 
 from models import get_model
 
+try:
+    from gui.gui_diagnostics import GuiDiagnosticsSession, diagnostics_enabled
+except ImportError:
+    GuiDiagnosticsSession = None  # type: ignore
+
+    def diagnostics_enabled() -> bool:
+        return False
+
 
 def _demo_trace(msg: str) -> None:
     if os.environ.get("SPECKLE_DEMO_TRACE", "").strip().lower() not in (
@@ -78,10 +86,15 @@ class InferenceWorker(QThread):
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         self._frame_buffer = collections.deque(maxlen=self._clip_len)
+        self._raw_frame_buffer = collections.deque(maxlen=self._clip_len)
         self._vote_buffer = collections.deque(maxlen=10)   # last N predictions for voting
         self._new_frame_cnt = 0
         self._infer_every = 4    # run inference every N new frames
         self._top_k = 5
+        self._checkpoint_path = ""
+        self._fiber_name = ""
+        self._logged_first_inference = False
+        self._diag_clip_saved = False
 
         self._buf_lock = threading.Lock()
         self._frame_queue: queue.Queue = queue.Queue(maxsize=2)
@@ -146,8 +159,25 @@ class InferenceWorker(QThread):
                 self._img_size = img_size
                 self._input_mode = input_mode
                 self._frame_buffer = collections.deque(maxlen=clip_len)
+                self._raw_frame_buffer = collections.deque(maxlen=clip_len)
                 self._vote_buffer.clear()
                 self._new_frame_cnt = 0
+                self._checkpoint_path = checkpoint_path
+                self._fiber_name = fiber_name
+                self._logged_first_inference = False
+                self._diag_clip_saved = False
+
+            if diagnostics_enabled() and GuiDiagnosticsSession is not None:
+                sess = GuiDiagnosticsSession.get()
+                if sess is not None:
+                    sess.set_model_meta(
+                        checkpoint_path=checkpoint_path,
+                        fiber_name=fiber_name,
+                        clip_len=clip_len,
+                        img_size=img_size,
+                        input_mode=input_mode,
+                        class_names=list(class_names),
+                    )
 
             msg = (
                 f"Model loaded: {fiber_name}  |  {model_type}  |  "
@@ -174,6 +204,19 @@ class InferenceWorker(QThread):
         with self._buf_lock:
             old = list(self._vote_buffer)
             self._vote_buffer = collections.deque(old[-maxlen:], maxlen=maxlen)
+
+    def reset_inference_state(self) -> None:
+        """Clear buffers and pending frames after recognition is stopped."""
+        with self._buf_lock:
+            self._frame_buffer.clear()
+            self._raw_frame_buffer.clear()
+            self._vote_buffer.clear()
+            self._new_frame_cnt = 0
+        while True:
+            try:
+                self._frame_queue.get_nowait()
+            except queue.Empty:
+                break
 
     # ── Frame ingestion (GUI thread — non-blocking) ─────────────────────
 
@@ -219,6 +262,7 @@ class InferenceWorker(QThread):
 
             processed = self._preprocess_frame(frame)
             self._frame_buffer.append(processed)
+            self._raw_frame_buffer.append(np.copy(frame))
             self._new_frame_cnt += 1
 
             if (
@@ -287,16 +331,64 @@ class InferenceWorker(QThread):
             counts = collections.Counter(self._vote_buffer)
             smoothed = counts.most_common(1)[0][0]
 
-            self.prediction_ready.emit({
+            result = {
                 "top1": top1_name,
                 "confidence": top1_conf,
                 "topk": topk,
                 "smoothed": smoothed,
                 "frame_count": len(self._frame_buffer),
-            })
+            }
+            self.prediction_ready.emit(result)
+
+            if diagnostics_enabled() and GuiDiagnosticsSession is not None:
+                sess = GuiDiagnosticsSession.get()
+                if sess is not None:
+                    sess._append_prediction(result)
+
+            if not self._logged_first_inference:
+                self._log_first_inference_tensor(tensor)
+
+            if (
+                diagnostics_enabled()
+                and GuiDiagnosticsSession is not None
+                and not self._diag_clip_saved
+            ):
+                sess = GuiDiagnosticsSession.get()
+                if sess is not None:
+                    raw_list = list(self._raw_frame_buffer)[-self._clip_len :]
+                    sess.log_inference_clip(
+                        raw_frames=raw_list,
+                        processed_frames=frames,
+                        tensor=tensor.detach().cpu().numpy(),
+                        prediction=result,
+                        infer_every=self._infer_every,
+                        buffer_len=len(self._frame_buffer),
+                    )
+                    self._diag_clip_saved = True
 
         except Exception as e:
             self.error.emit(f"Inference error: {e}")
+
+    def _log_first_inference_tensor(self, tensor: torch.Tensor) -> None:
+        """Log model input statistics once per model load (not every frame)."""
+        self._logged_first_inference = True
+        arr = tensor.detach().cpu().numpy()
+        flat = arr.astype(np.float64).ravel()
+        challenge = ""
+        if diagnostics_enabled() and GuiDiagnosticsSession is not None:
+            sess = GuiDiagnosticsSession.get()
+            if sess is not None:
+                challenge = sess.auth_challenge or ""
+        msg = (
+            f"[Inference] first batch: shape={tuple(arr.shape)} dtype={arr.dtype} "
+            f"min={float(np.min(flat)):.4f} max={float(np.max(flat)):.4f} "
+            f"mean={float(np.mean(flat)):.4f} std={float(np.std(flat)):.4f} | "
+            f"buffer_len={len(self._frame_buffer)} clip_len={self._clip_len} "
+            f"input_mode={self._input_mode} resize={self._img_size} "
+            f"model={self._fiber_name} challenge={challenge!r} "
+            f"infer_every={self._infer_every} device={self._device}"
+        )
+        print(msg, flush=True)
 
     def stop(self):
         """Request shutdown and wait for the thread to exit."""
