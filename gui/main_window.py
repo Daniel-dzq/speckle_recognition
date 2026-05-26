@@ -51,6 +51,7 @@ def _demo_trace_ui(msg: str) -> None:
 
 from gui.slm_window         import SLMWindow
 from gui.camera_worker      import CameraWorker
+from gui.camera_scanner     import CameraDeviceEntry, scan_all_cameras
 from gui.mv_camera_worker   import MvCameraWorker
 from gui.inference_worker   import InferenceWorker
 from gui.robot_panel        import RobotPanel
@@ -75,7 +76,6 @@ from gui.challenge_manifest import (
 from gui.demo_presentation  import add_card_title, demo_font, style_control_section
 from gui.cute_style         import PREMIUM_STYLE
 from gui.effects            import make_glow, apply_premium_shadow
-import gui.mvsdk as mvsdk
 
 
 DARK_STYLE = """
@@ -772,36 +772,47 @@ class MainWindow(QMainWindow):
         add_card_title(cam_outer, "CCD Acquisition")
         cl = QGridLayout()
         cl.setSpacing(8)
+        cl.setColumnStretch(1, 1)
+
+        self._btn_scan_cameras = QPushButton("Scan Cameras")
+        self._btn_scan_cameras.setMinimumHeight(42)
+        self._btn_scan_cameras.setFont(demo_font(15, weight=QFont.DemiBold))
+        self._btn_scan_cameras.setToolTip(
+            "Detect OpenCV camera indices and MindVision SDK devices."
+        )
+        self._btn_scan_cameras.clicked.connect(self._scan_cameras)
+        cl.addWidget(self._btn_scan_cameras, 0, 0, 1, 2)
+
+        cam_src_lbl = QLabel("Camera Source:")
+        cam_src_lbl.setFont(demo_font(14, weight=QFont.DemiBold))
+        cl.addWidget(cam_src_lbl, 1, 0)
+        self._combo_camera_source = QComboBox()
+        self._combo_camera_source.setMinimumHeight(40)
+        self._combo_camera_source.addItem("Click Scan Cameras", None)
+        cl.addWidget(self._combo_camera_source, 1, 1, 1, 2)
 
         self._btn_start_cam = QPushButton("Start CCD")
         self._btn_start_cam.setObjectName("primary")
         self._btn_start_cam.setMinimumHeight(46)
         self._btn_start_cam.setFont(demo_font(16, weight=QFont.Bold))
         self._btn_start_cam.clicked.connect(self._start_camera)
-        cl.addWidget(self._btn_start_cam, 0, 0)
+        cl.addWidget(self._btn_start_cam, 2, 0)
 
         self._btn_stop_cam = QPushButton("Stop CCD")
         self._btn_stop_cam.setObjectName("danger")
         self._btn_stop_cam.setMinimumHeight(44)
         self._btn_stop_cam.setEnabled(False)
         self._btn_stop_cam.clicked.connect(self._stop_camera)
-        cl.addWidget(self._btn_stop_cam, 0, 1)
+        cl.addWidget(self._btn_stop_cam, 2, 1)
 
-        self._btn_start_mv = QPushButton("MindVision CCD")
-        self._btn_start_mv.setMinimumHeight(40)
-        self._btn_start_mv.setToolTip(
-            "HT-UBS300C via MindVision SDK (use instead of Start CCD when applicable)."
-        )
-        self._btn_start_mv.clicked.connect(self._start_mv_camera)
-        cl.addWidget(self._btn_start_mv, 1, 0, 1, 2)
-
-        self._lbl_source = QLabel("Camera: not started")
+        self._lbl_source = QLabel("Camera status: not connected")
         self._lbl_source.setObjectName("demoHintLabel")
         self._lbl_source.setWordWrap(True)
-        cl.addWidget(self._lbl_source, 2, 0, 1, 2)
+        cl.addWidget(self._lbl_source, 3, 0, 1, 2)
         cam_outer.addLayout(cl)
         layout.addWidget(cam_box)
         self._group_camera_video = cam_box
+        self._camera_catalog: list[CameraDeviceEntry] = []
 
         # ── Offline video input (collapsed, below CCD) ──────────────────
         self._offline_input_box = QGroupBox("Offline Demo / Video Input")
@@ -896,21 +907,7 @@ class MainWindow(QMainWindow):
 
         cam_adv = QGridLayout()
         cam_adv.setSpacing(6)
-        cam_adv.addWidget(QLabel("Camera index:"), 0, 0)
-        self._spin_cam_idx = QSpinBox()
-        self._spin_cam_idx.setRange(0, 20)
-        self._spin_cam_idx.setMinimumHeight(36)
-        cam_adv.addWidget(self._spin_cam_idx, 0, 1)
-
-        self._btn_scan_cam = QPushButton("Scan Cameras")
-        self._btn_scan_cam.setMinimumHeight(36)
-        self._btn_scan_cam.setToolTip(
-            "Probe indices 0-9; on macOS triggers camera permission dialog."
-        )
-        self._btn_scan_cam.clicked.connect(self._scan_cameras)
-        cam_adv.addWidget(self._btn_scan_cam, 0, 2)
-
-        cam_adv.addWidget(QLabel("Resolution:"), 1, 0)
+        cam_adv.addWidget(QLabel("Resolution:"), 0, 0)
         self._combo_cam_res = QComboBox()
         self._combo_cam_res.setMinimumHeight(36)
         self._combo_cam_res.addItem("Auto (default)", (None, None))
@@ -920,7 +917,7 @@ class MainWindow(QMainWindow):
         self._combo_cam_res.addItem("1024×768", (1024, 768))
         self._combo_cam_res.addItem("640×480", (640, 480))
         self._combo_cam_res.setCurrentIndex(1)
-        cam_adv.addWidget(self._combo_cam_res, 1, 1, 1, 2)
+        cam_adv.addWidget(self._combo_cam_res, 0, 1, 1, 2)
         adv_layout.addLayout(cam_adv)
 
         sl = QGridLayout()
@@ -2010,140 +2007,146 @@ class MainWindow(QMainWindow):
         self._lbl_source.setText(f"File: {basename}")
         self._log(f"[MANUAL SCREENSHOT] File source label for documentation (no file opened): {basename}")
 
-    def _scan_cameras(self):
-        """Probe camera indices 0-9 on the main thread and update the spin box.
+    def _populate_camera_selector(self, entries: list[CameraDeviceEntry]) -> None:
+        self._camera_catalog = list(entries)
+        self._combo_camera_source.blockSignals(True)
+        self._combo_camera_source.clear()
+        self._combo_camera_source.addItem("No camera selected", None)
+        for entry in entries:
+            self._combo_camera_source.addItem(entry.label, entry)
+        if entries:
+            prefer_mv = next(
+                (i for i, e in enumerate(entries) if e.backend == "mindvision"), None
+            )
+            self._combo_camera_source.setCurrentIndex(
+                1 + (prefer_mv if prefer_mv is not None else 0)
+            )
+        else:
+            self._combo_camera_source.setCurrentIndex(0)
+        self._combo_camera_source.blockSignals(False)
 
-        Running on the main thread is essential on macOS: the first VideoCapture
-        call triggers the system camera-permission dialog, which MUST happen on
-        the main run loop.  Calling it from a worker thread causes the
-        'can not spin main run loop from other thread' error.
-        """
-        import sys
+    def _selected_camera_entry(self) -> Optional[CameraDeviceEntry]:
+        data = self._combo_camera_source.currentData()
+        if isinstance(data, CameraDeviceEntry):
+            return data
+        return None
 
-        self._btn_scan_cam.setEnabled(False)
-        self._btn_scan_cam.setText("Scanning…")
+    def _scan_cameras(self) -> None:
+        """Probe OpenCV and MindVision devices on the main thread (macOS permission)."""
+        self._btn_scan_cameras.setEnabled(False)
+        self._btn_scan_cameras.setText("Scanning…")
         QApplication.processEvents()
 
         manual = _env_manual_screenshot_mode()
         _skip_auth_backup = None
+        indices = (0, 1) if manual else range(6)
+        dev_names: list[str] = []
+
         if manual:
             if sys.platform == "darwin":
                 os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "1")
             self._log(
-                "[MANUAL SCREENSHOT] Scanning camera indices 0–1 only (fast probe; full scan uses 0–11 normally)."
+                "[MANUAL SCREENSHOT] Scanning camera indices 0-1 only (demo uses 0-5)."
             )
-        else:
-            if sys.platform == "darwin":
-                dev_names = self._macos_list_av_devices()
-                if dev_names:
-                    self._log("macOS AVFoundation devices detected by OS:")
-                    for i, name in enumerate(dev_names):
-                        if name:
-                            self._log(f"  [{i}] {name}")
-                else:
-                    self._log(
-                        "macOS: could not enumerate device names "
-                        "(install ffmpeg via Homebrew for full device list)."
-                    )
-                _skip_auth_backup = os.environ.pop("OPENCV_AVFOUNDATION_SKIP_AUTH", None)
+        elif sys.platform == "darwin":
+            dev_names = self._macos_list_av_devices() or []
+            if dev_names:
+                self._log("macOS AVFoundation devices detected by OS:")
+                for i, name in enumerate(dev_names):
+                    if name:
+                        self._log(f"  [{i}] {name}")
+            else:
+                self._log(
+                    "macOS: could not enumerate device names "
+                    "(install ffmpeg via Homebrew for full device list)."
+                )
+            _skip_auth_backup = os.environ.pop("OPENCV_AVFOUNDATION_SKIP_AUTH", None)
 
-        available = []
-        indices = (0, 1) if manual else range(12)
-        for i in indices:
-            cap = cv2.VideoCapture(i)
-            try:
-                if cap.isOpened():
-                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    available.append((i, w, h))
-            finally:
-                cap.release()
+        entries = scan_all_cameras(
+            opencv_indices=indices,
+            log_fn=self._log,
+            device_names=dev_names,
+            include_mindvision=not manual,
+        )
 
-        self._btn_scan_cam.setEnabled(True)
-        self._btn_scan_cam.setText("Scan Available Cameras")
+        self._btn_scan_cameras.setEnabled(True)
+        self._btn_scan_cameras.setText("Scan Cameras")
+        self._populate_camera_selector(entries)
 
-        if available:
-            best_idx = available[-1][0]
-            self._spin_cam_idx.setValue(best_idx)
-            dev_names_local = self._macos_list_av_devices() if sys.platform == "darwin" else []
-            for idx, w, h in available:
-                name = dev_names_local[idx] if idx < len(dev_names_local) else ""
-                tag = f"  ← {name}" if name else ""
-                self._log(f"  Camera [{idx}] {w}×{h}{tag}")
-            self._log(
-                f"Scan complete. Found {len(available)} camera(s). "
-                f"Selected index {best_idx} (change in Camera index spinner)."
-            )
-            if sys.platform == "darwin":
+        if entries:
+            if sys.platform == "darwin" and not manual:
                 os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = "1"
+            sel = self._selected_camera_entry()
+            if sel is not None:
+                self._lbl_source.setText(f"Camera status: {sel.label} (not started)")
         else:
             if not manual and sys.platform == "darwin" and _skip_auth_backup is not None:
                 os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = _skip_auth_backup
-
-            msg = "No cameras found (OpenCV returned 0 devices)."
-            if sys.platform == "darwin":
-                msg += (
-                    "\n\nPossible causes on macOS:"
-                    "\n1. Permission not granted yet — grant Cursor access in"
-                    "\n   System Settings → Privacy & Security → Camera,"
-                    "\n   then QUIT AND RESTART the app (macOS requires a restart"
-                    "\n   before newly-granted permissions take effect)."
-                    "\n\n2. External CCD not recognised — check if the camera"
-                    "\n   appears in System Information → USB or Camera list."
-                    "\n   Some industrial cameras require their own SDK driver."
-                )
-            self._log(f"[CAMERA] {msg}")
-            if manual:
+            self._lbl_source.setText("Camera status: not connected")
+            if not manual:
                 self._log(
-                    "[MANUAL SCREENSHOT] No camera opened on indices 0–1; screenshot still valid for layout."
+                    "Camera may be occupied. Close vendor camera software and scan again."
                 )
-            else:
+                msg = (
+                    "No cameras found.\n\n"
+                    "Close vendor camera software, click Scan Cameras again, "
+                    "then select a device and Start CCD."
+                )
+                if sys.platform == "darwin":
+                    msg += (
+                        "\n\nOn macOS, grant Camera access in System Settings, "
+                        "then quit and restart this app."
+                    )
                 QMessageBox.warning(self, "No Cameras Found", msg)
 
-    def _start_camera(self):
+    def _start_camera(self) -> None:
+        entry = self._selected_camera_entry()
+        if entry is None:
+            self._log("Start CCD blocked: no camera selected. Scan cameras first.")
+            self._lbl_source.setText("Camera status: not connected")
+            return
         self._stop_camera()
         self._reset_camera_session_logs()
-        idx = self._spin_cam_idx.value()
+        if entry.backend == "opencv":
+            self._start_opencv_camera(entry)
+        elif entry.backend == "mindvision":
+            self._start_mindvision_camera(entry)
+        else:
+            self._log(f"Start CCD blocked: unknown backend {entry.backend!r}.")
+
+    def _start_opencv_camera(self, entry: CameraDeviceEntry) -> None:
+        idx = entry.opencv_index
+        if idx is None:
+            self._log("Start CCD blocked: invalid OpenCV camera entry.")
+            return
         self._log(f"Starting OpenCV CCD (camera index {idx}) …")
 
-        # ── macOS camera-permission pre-check (main thread) ───────────────
-        # AVFoundation's permission dialog must be triggered from the main
-        # run loop.  We open the camera briefly here so macOS can prompt the
-        # user, then hand off to the worker thread.  On non-macOS platforms
-        # this is a fast no-op.
-        import sys
         if sys.platform == "darwin":
-            # Remove SKIP_AUTH so the system permission dialog can appear.
             os.environ.pop("OPENCV_AVFOUNDATION_SKIP_AUTH", None)
             test_cap = cv2.VideoCapture(idx)
             opened = test_cap.isOpened()
             test_cap.release()
             if not opened:
-                # Try to get device names so user can identify which index to use
                 dev_names = self._macos_list_av_devices()
+                self._log(
+                    "Camera open failed. Close vendor camera software and try again, "
+                    "or select another camera."
+                )
+                self._log(
+                    "Camera may be occupied. Close vendor camera software and scan again."
+                )
                 hint = ""
                 if dev_names:
                     hint = "\n\nDevices macOS sees:\n" + "\n".join(
                         f"  [{i}] {n}" for i, n in enumerate(dev_names) if n
                     )
-                msg = (
-                    f"Cannot open camera device {idx} on macOS.{hint}\n\n"
-                    "Checklist:\n"
-                    "1. Grant Cursor access:\n"
-                    "   System Settings → Privacy & Security → Camera → Cursor ON\n"
-                    "2. QUIT and RESTART this app after granting permission\n"
-                    "   (macOS only applies new permissions after restart).\n"
-                    "3. Click 'Scan Available Cameras' to find the correct index.\n"
-                    "4. External industrial CCDs may need their vendor SDK installed."
+                QMessageBox.critical(
+                    self,
+                    "Cannot Open Camera",
+                    f"Cannot open camera index {idx}.{hint}\n\n"
+                    "Scan cameras again and pick another source.",
                 )
-                self._log(
-                    f"[CAMERA ERROR] Cannot open device {idx}. "
-                    f"Close vendor camera software and try again, or select another camera index. "
-                    f"Devices: {dev_names or 'unknown'}"
-                )
-                QMessageBox.critical(self, "Cannot Open Camera", msg)
                 return
-            # Permission confirmed — suppress re-authorization in the worker thread.
             os.environ["OPENCV_AVFOUNDATION_SKIP_AUTH"] = "1"
 
         w, h = self._combo_cam_res.currentData()
@@ -2158,63 +2161,27 @@ class MainWindow(QMainWindow):
         self._capture_active = True
         self._btn_start_cam.setEnabled(False)
         self._btn_stop_cam.setEnabled(True)
-        self._lbl_source.setText(f"Camera device: {idx}")
+        self._lbl_source.setText(f"Camera status: {entry.label}")
         self._set_cam_controls_enabled(True)
-        self._log(f"Camera started (device {idx})")
+        self._log(f"Camera started (OpenCV index {idx})")
         self._update_recognition_status_label()
         self._refresh_demo_step_status()
         _demo_trace_ui(f"Start Camera OpenCV worker started idx={idx}")
 
-    def _start_mv_camera(self):
-        """Start the HT-UBS300C via MindVision SDK (bypasses OpenCV entirely)."""
-        self._stop_camera()
-        self._reset_camera_session_logs()
-        self._log("Starting MindVision CCD (HT-UBS300C) …")
-
-        # Enumerate MindVision devices
-        try:
-            mvsdk.sdk_init()
-            devices = mvsdk.enumerate_devices()
-        except FileNotFoundError as exc:
-            QMessageBox.critical(self, "MindVision SDK Not Found", str(exc))
+    def _start_mindvision_camera(self, entry: CameraDeviceEntry) -> None:
+        dev = entry.mv_device
+        if dev is None:
+            self._log("Start CCD blocked: invalid MindVision camera entry.")
             return
-        except Exception as exc:
-            QMessageBox.critical(self, "MindVision Error", f"Enumeration failed:\n{exc}")
-            return
-
-        if not devices:
-            import sys as _sys
-            if _sys.platform == "darwin":
-                hint = (
-                    "macOS checklist:\n"
-                    "1. Plug in the HT-UBS300C USB cable and wait ~3 s.\n"
-                    "2. Click this button again.\n"
-                    "3. If still not found, check System Settings → Privacy → Camera."
-                )
-            else:
-                hint = (
-                    "Windows checklist:\n"
-                    "1. Plug in the HT-UBS300C USB cable and wait ~5 s.\n"
-                    "2. Open Device Manager and verify the camera appears\n"
-                    "   (should show as 'MindVision USB Camera' or similar).\n"
-                    "3. If it shows as 'Unknown Device', install the MindVision\n"
-                    "   USB driver from the SDK folder first.\n"
-                    "4. Click this button again."
-                )
-            QMessageBox.warning(
-                self, "No MindVision Camera",
-                f"No MindVision camera detected.\n\n{hint}"
-            )
-            return
-
-        # If multiple devices, pick the first (could add a dialog later)
-        dev = devices[0]
-        name = dev.friendly_name or dev.product_name
-        self._log(f"MindVision: found camera '{name}' (SN: {dev.sn})")
-
+        name = (getattr(dev, "friendly_name", None) or getattr(dev, "product_name", None) or "MindVision")
+        self._log(f"Starting MindVision CCD ({name}) …")
         try:
             self._camera_worker = MvCameraWorker(dev, self)
         except Exception as exc:
+            self._log(
+                "Camera open failed. Close vendor camera software and try again, "
+                "or select another camera."
+            )
             QMessageBox.critical(self, "MindVision Error", f"Cannot create worker:\n{exc}")
             return
 
@@ -2227,7 +2194,7 @@ class MainWindow(QMainWindow):
         self._capture_active = True
         self._btn_start_cam.setEnabled(False)
         self._btn_stop_cam.setEnabled(True)
-        self._lbl_source.setText(f"MindVision CCD: {name}")
+        self._lbl_source.setText(f"Camera status: {entry.label}")
         self._set_cam_controls_enabled(True)
         self._log(f"MindVision camera started: {name}")
         self._update_recognition_status_label()
@@ -2448,10 +2415,14 @@ class MainWindow(QMainWindow):
     @Slot(str)
     def _on_cam_error(self, msg: str):
         self._log(f"[CAMERA ERROR] {msg}")
-        if "cannot open" in msg.lower() or "open failed" in msg.lower():
+        low = msg.lower()
+        if "cannot open" in low or "open failed" in low or "occupied" in low:
             self._log(
                 "Camera open failed. Close vendor camera software and try again, "
-                "or select another camera index."
+                "or select another camera."
+            )
+            self._log(
+                "Camera may be occupied. Close vendor camera software and scan again."
             )
         self._stop_camera()
 
