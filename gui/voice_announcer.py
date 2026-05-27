@@ -77,14 +77,19 @@ class VoiceAnnouncer(QObject):
         self._prune_timer.setInterval(500)
         self._prune_timer.timeout.connect(self._prune_finished)
         self._prune_timer.start()
+        if self._backend in ("say_popen", "say"):
+            self._mac_voice = self._detect_macos_chinese_voice(self._program_path)
+
+    def log_startup_status(self) -> None:
+        """Emit voice backend messages after the GUI log widget exists."""
         if self._backend is None:
             self._log("Voice backend unavailable; continuing without speech.")
             self._log(
                 "If speech is expected, check system volume and output device in "
                 "System Settings."
             )
-        elif self._backend in ("say_popen", "say"):
-            self._mac_voice = self._detect_macos_chinese_voice(self._program_path)
+            return
+        if self._backend in ("say_popen", "say"):
             if self._mac_voice:
                 self._log(f"Selected macOS voice: {self._mac_voice}")
             else:

@@ -219,6 +219,7 @@ FIBER_MODELS_DIR = os.path.join(ROOT, "models", "final_15fibers")
 FIBER_MODELS_DIR_LEGACY = os.path.join(ROOT, "results", "fiber_auth", "fiber_models")
 LABEL_MAP_PATH = os.path.join(FIBER_MODELS_DIR, "label_map.json")
 LOW_CONFIDENCE_THRESHOLD = 0.60
+INFER_WARMUP_FRAMES = int(os.environ.get("SPECKLE_INFER_WARMUP_FRAMES", "12"))
 
 DEFAULT_TEXT_CHALLENGES = [
     "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
@@ -429,6 +430,9 @@ class MainWindow(QMainWindow):
         self._recognition_active = False
         self._last_voice_decision = ""
         self._waiting_voice_spoken = False
+        self._logged_first_prediction_context = False
+        self._pending_logs: list[str] = []
+        self._log_text = None
         self._voice_announcer = VoiceAnnouncer(enabled=True, log_fn=self._log, parent=self)
         self._banner_hide_timer = QTimer(self)
         self._banner_hide_timer.setSingleShot(True)
@@ -477,6 +481,7 @@ class MainWindow(QMainWindow):
             "Speckle-PUF demo ready: select a challenge, send it to the SLM, "
             "start CCD, then click Start Recognition."
         )
+        self._voice_announcer.log_startup_status()
 
     def _setup_ui(self):
         self.setWindowTitle("Speckle-PUF Live Demo")
@@ -527,6 +532,7 @@ class MainWindow(QMainWindow):
         self._log_text.setMaximumHeight(140)
         log_layout.addWidget(self._log_text)
         apply_premium_shadow(self._log_text)
+        self._flush_pending_logs()
         main_layout.addWidget(self._log_box)
 
         self._status_bar = QStatusBar()
@@ -1234,6 +1240,9 @@ class MainWindow(QMainWindow):
             self._lbl_model_status.setText(f"Load failed: {fiber}")
             self._lbl_model.setText("Model: load failed")
             self._log("[ERROR] Model load failed")
+        else:
+            self._display_smoother.reset()
+            self._infer_worker.reset_inference_state()
 
     def _describe_screen(self, idx, screen):
         geom = screen.geometry()
@@ -1455,6 +1464,13 @@ class MainWindow(QMainWindow):
                 sess.set_auth_challenge(self.last_sent_challenge_label)
         except ImportError:
             pass
+        self._infer_worker.reset_inference_state()
+        if self._recognition_active:
+            self._infer_worker.set_warmup_skip(INFER_WARMUP_FRAMES)
+            self._log(
+                f"Inference warm-up: skipping initial {INFER_WARMUP_FRAMES} frames "
+                "after challenge send."
+            )
         self._display_smoother.reset()
         self._hide_overlay_banner()
         self._recognition_result.set_waiting(self.last_sent_challenge_label)
@@ -2228,6 +2244,27 @@ class MainWindow(QMainWindow):
         self._refresh_demo_step_status()
         _demo_trace_ui(f"Video file worker started path={path!r}")
 
+    def _log_recognition_context(self, *, predicted: str = "") -> None:
+        """One-shot diagnostic: challenge labels vs model class names."""
+        from gui.challenge_widgets import labels_match
+
+        preview = (self.current_challenge_label or "").strip() or "—"
+        sent = (self.last_sent_challenge_label or "").strip() or "—"
+        auth = self._auth_challenge_label() or "—"
+        names = list(self._infer_worker._class_names)
+        preview_n = names[:8]
+        if len(names) > 8:
+            preview_n.append("...")
+        match_note = ""
+        if predicted and auth and auth != "—":
+            match_note = f" match={labels_match(auth, predicted)}"
+        src = self._lbl_source.text() if hasattr(self, "_lbl_source") else ""
+        self._log(
+            f"[Recognition context] preview={preview!r} sent={sent!r} auth={auth!r} "
+            f"predicted={predicted!r}{match_note} | model={self._active_fiber} "
+            f"labels={preview_n} | source={src}"
+        )
+
     def _recognition_block_reason(self) -> Optional[str]:
         if not self._capture_active:
             return "CCD is not running. Start CCD first."
@@ -2272,7 +2309,9 @@ class MainWindow(QMainWindow):
         self._display_smoother.reset()
         self._last_voice_decision = ""
         self._waiting_voice_spoken = False
+        self._logged_first_prediction_context = False
         self._infer_worker.reset_inference_state()
+        self._infer_worker.set_warmup_skip(INFER_WARMUP_FRAMES)
         self._btn_start_recognition.setEnabled(False)
         self._btn_stop_recognition.setEnabled(True)
         self._update_recognition_status_label()
@@ -2282,6 +2321,10 @@ class MainWindow(QMainWindow):
         self._cam_glow.setBlurRadius(0)
         self._hide_overlay_banner()
         self._log("Recognition started.")
+        self._log(
+            f"Inference warm-up: skipping initial {INFER_WARMUP_FRAMES} frames."
+        )
+        self._log_recognition_context()
         self._refresh_demo_step_status()
 
     def _stop_recognition(self) -> None:
@@ -2392,8 +2435,14 @@ class MainWindow(QMainWindow):
         _demo_trace_ui(f"_on_frame shape={frame.shape}")
         if frame is not None and getattr(frame, "size", 0) > 0:
             if not self._first_frame_logged:
+                ch = (
+                    "gray"
+                    if frame.ndim == 2
+                    else ("bgr" if frame.ndim == 3 and frame.shape[2] >= 3 else "?")
+                )
                 self._log(
-                    f"First camera frame: shape={tuple(frame.shape)}, dtype={frame.dtype}"
+                    f"First camera frame: shape={tuple(frame.shape)}, dtype={frame.dtype}, "
+                    f"layout={ch} (preview and inference use the same copy from worker)"
                 )
                 self._first_frame_logged = True
             try:
@@ -2404,7 +2453,7 @@ class MainWindow(QMainWindow):
                     sess.log_raw_frame(frame, tag="live")
             except ImportError:
                 pass
-        self._last_frame = frame
+        self._last_frame = np.copy(frame) if frame is not None else None
         self._cam_label.set_frame(frame)
         if self._recognition_active and self._infer_worker._model is not None:
             self._infer_worker.push_frame(frame)
@@ -2462,6 +2511,9 @@ class MainWindow(QMainWindow):
 
         snap = feed.snapshot
         self._recognition_result.apply_snapshot(snap)
+        if not self._logged_first_prediction_context:
+            self._log_recognition_context(predicted=snap.predicted)
+            self._logged_first_prediction_context = True
         self._announce_stable_decision(snap)
 
         show_warn = snap.decision == "LOW CONFIDENCE" or (
@@ -2588,9 +2640,29 @@ class MainWindow(QMainWindow):
     def _on_infer_error(self, msg: str):
         self._log(f"[INFERENCE ERROR] {msg}")
 
-    def _log(self, msg: str):
+    def _log(self, msg: str) -> None:
+        if not msg:
+            return
         ts = time.strftime("%H:%M:%S")
-        self._log_text.append(f"[{ts}] {msg}")
+        line = f"[{ts}] {msg}"
+        log_widget = getattr(self, "_log_text", None)
+        if log_widget is None:
+            pending = getattr(self, "_pending_logs", None)
+            if pending is not None:
+                pending.append(line)
+            else:
+                print(f"[startup] {msg}", flush=True)
+            return
+        log_widget.append(line)
+
+    def _flush_pending_logs(self) -> None:
+        log_widget = getattr(self, "_log_text", None)
+        pending = getattr(self, "_pending_logs", None)
+        if log_widget is None or not pending:
+            return
+        for line in pending:
+            log_widget.append(line)
+        pending.clear()
 
     def closeEvent(self, event):
         _demo_trace_ui("closeEvent: stopping camera and inference thread")

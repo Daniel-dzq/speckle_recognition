@@ -95,6 +95,7 @@ class InferenceWorker(QThread):
         self._fiber_name = ""
         self._logged_first_inference = False
         self._diag_clip_saved = False
+        self._warmup_skip_remaining = 0
 
         self._buf_lock = threading.Lock()
         self._frame_queue: queue.Queue = queue.Queue(maxsize=2)
@@ -212,11 +213,17 @@ class InferenceWorker(QThread):
             self._raw_frame_buffer.clear()
             self._vote_buffer.clear()
             self._new_frame_cnt = 0
+            self._warmup_skip_remaining = 0
         while True:
             try:
                 self._frame_queue.get_nowait()
             except queue.Empty:
                 break
+
+    def set_warmup_skip(self, n: int) -> None:
+        """Drop the next N frames before filling the clip buffer (unstable speckle)."""
+        with self._buf_lock:
+            self._warmup_skip_remaining = max(0, int(n))
 
     # ── Frame ingestion (GUI thread — non-blocking) ─────────────────────
 
@@ -258,6 +265,10 @@ class InferenceWorker(QThread):
     def _process_frame(self, frame: np.ndarray):
         with self._buf_lock:
             if self._model is None:
+                return
+
+            if self._warmup_skip_remaining > 0:
+                self._warmup_skip_remaining -= 1
                 return
 
             processed = self._preprocess_frame(frame)
@@ -379,14 +390,23 @@ class InferenceWorker(QThread):
             sess = GuiDiagnosticsSession.get()
             if sess is not None:
                 challenge = sess.auth_challenge or ""
+        raw_stats = ""
+        if self._raw_frame_buffer:
+            raw = self._raw_frame_buffer[-1]
+            rflat = raw.astype(np.float64).ravel()
+            raw_stats = (
+                f" | raw_shape={tuple(raw.shape)} raw_dtype={raw.dtype} "
+                f"raw_min={float(np.min(rflat)):.1f} raw_max={float(np.max(rflat)):.1f} "
+                f"raw_mean={float(np.mean(rflat)):.1f}"
+            )
         msg = (
             f"[Inference] first batch: shape={tuple(arr.shape)} dtype={arr.dtype} "
             f"min={float(np.min(flat)):.4f} max={float(np.max(flat)):.4f} "
-            f"mean={float(np.mean(flat)):.4f} std={float(np.std(flat)):.4f} | "
+            f"mean={float(np.mean(flat)):.4f} std={float(np.std(flat)):.4f}{raw_stats} | "
             f"buffer_len={len(self._frame_buffer)} clip_len={self._clip_len} "
             f"input_mode={self._input_mode} resize={self._img_size} "
-            f"model={self._fiber_name} challenge={challenge!r} "
-            f"infer_every={self._infer_every} device={self._device}"
+            f"model={self._fiber_name} path={self._checkpoint_path} "
+            f"challenge={challenge!r} infer_every={self._infer_every} device={self._device}"
         )
         print(msg, flush=True)
 
